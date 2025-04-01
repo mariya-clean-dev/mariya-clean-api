@@ -83,6 +83,15 @@ export class UsersService {
     });
   }
 
+  async findallroles() {
+    return this.prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+  }
+
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },

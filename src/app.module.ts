@@ -13,6 +13,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { RegionsModule } from './regions/regions.module';
 import { StripeModule } from './stripe/stripe.module';
+import { ResponseModule } from './response/response.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { StripeModule } from './stripe/stripe.module';
     SchedulerModule,
     RegionsModule,
     StripeModule,
+    ResponseModule,
   ],
 })
 export class AppModule {}
