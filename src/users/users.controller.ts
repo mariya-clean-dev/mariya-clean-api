@@ -10,6 +10,7 @@ import {
   Request,
   Query,
 } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -21,6 +22,7 @@ import { CreateAddressDto } from './dto/create-address.dto';
 import { ResponseService } from 'src/response/response.service';
 
 @Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
@@ -28,7 +30,7 @@ export class UsersController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async create(@Body() createUserDto: CreateUserDto) {
     const user = await this.usersService.create(createUserDto);
@@ -39,7 +41,7 @@ export class UsersController {
   }
 
   @Get()
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async findAll(@Query('role') role?: string) {
     if (role) {
@@ -50,13 +52,14 @@ export class UsersController {
   }
 
   @Get('roles')
+  @Public()
   async getRoles(@Request() req) {
     const roles = await this.usersService.findallroles();
     return this.responseService.successResponse('Roles Found', roles);
   }
 
   @Get('staff')
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async findAllStaff() {
     const staff = await this.usersService.findByRole('staff');
@@ -64,34 +67,32 @@ export class UsersController {
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
     const user = await this.usersService.findOne(req.user.id);
     return this.responseService.successResponse('User Profile', user);
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch('profile')
-  @UseGuards(JwtAuthGuard)
   async updateProfile(@Request() req, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(req.user.id, updateUserDto);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard, JwtAuthGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
@@ -99,13 +100,11 @@ export class UsersController {
 
   // Address endpoints
   @Post('address')
-  @UseGuards(JwtAuthGuard)
   async addAddress(@Request() req, @Body() createAddressDto: CreateAddressDto) {
     return this.usersService.addAddress(req.user.id, createAddressDto);
   }
 
   @Patch('address/:id')
-  @UseGuards(JwtAuthGuard)
   async updateAddress(
     @Request() req,
     @Param('id') id: string,
@@ -115,13 +114,11 @@ export class UsersController {
   }
 
   @Delete('address/:id')
-  @UseGuards(JwtAuthGuard)
   async removeAddress(@Request() req, @Param('id') id: string) {
     return this.usersService.removeAddress(req.user.id, id);
   }
 
   @Patch('address/:id/default')
-  @UseGuards(JwtAuthGuard)
   async setDefaultAddress(@Request() req, @Param('id') id: string) {
     return this.usersService.setDefaultAddress(req.user.id, id);
   }
