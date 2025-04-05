@@ -22,7 +22,19 @@ export class CreateServiceDto {
 
   @IsNumber()
   @IsNotEmpty()
-  monthlySlots: number;
+  base_price: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  bathroom_rate: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  room_rate: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  square_foot_price: number;
 
   @IsBoolean()
   @IsOptional()

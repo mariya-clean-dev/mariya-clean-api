@@ -84,7 +84,6 @@ model Region {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
   UserRegion  UserRegion[]
-  BasePlan    BasePlan[]
 
   @@map("regions")
 }
@@ -146,76 +145,25 @@ model UserRegion {
   @@map("user_region")
 }
 
-model ServiceCategory {
-  id           String                   @id @default(uuid())
-  name         String
-  description  String?                  @db.Text
-  createdAt    DateTime                 @default(now()) @map("created_at")
-  updatedAt    DateTime                 @default(now()) @updatedAt @map("updated_at")
-  services     ServiceCategoryMapping[]
-
-  @@map("service_categories")
-}
-
 model Service {
   id                   String                   @id @default(uuid())
   name                 String
   description          String?                  @db.Text
   durationMinutes      Int                      @map("duration_minutes")
-  monthlySlots         Int                      @map("monthly_slots")
+  base_price           Decimal                  @db.Decimal(10, 2)
+  bathroom_rate        Decimal                  @db.Decimal(10, 2)
+  room_rate            Decimal                  @db.Decimal(10, 2)
+  square_foot_price    Decimal                  @db.Decimal(10, 2)
   isActive             Boolean                  @default(true) @map("is_active")
   stripeProductId      String?                  @map("stripe_product_id") // Added for Stripe
   stripePriceId        String?                  @map("stripe_price_id") // Added for Stripe
   createdAt            DateTime                 @default(now()) @map("created_at")
   updatedAt            DateTime                 @default(now()) @updatedAt @map("updated_at")
-  categories           ServiceCategoryMapping[]
-  basePlans            BasePlan[]
-  priceCharts          PriceChart[]
   bookings             Booking[]
   subscriptions        Subscription[]
   serviceAddOns        ServiceAddOn[]
 
   @@map("services")
-}
-
-model ServiceCategoryMapping {
-  id           String          @id @default(uuid())
-  serviceId    String          @map("service_id")
-  categoryId   String          @map("category_id")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  service      Service         @relation(fields: [serviceId], references: [id])
-  category     ServiceCategory @relation(fields: [categoryId], references: [id])
-
-  @@unique([serviceId, categoryId])
-  @@map("service_category_mapping")
-}
-
-model BasePlan {
-  id           String   @id @default(uuid())
-  serviceId    String   @map("service_id")
-  minimumArea  Int      @map("minimum_area")
-  maximumArea  Int      @map("maximum_area")
-  price        Decimal  @db.Decimal(10, 2)
-  currency     String   @default("USD")
-  regionId     String   @map("region_id")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-  service      Service  @relation(fields: [serviceId], references: [id])
-  region       Region   @relation(fields: [regionId], references: [id])
-
-  @@map("base_plans")
-}
-
-model PriceChart {
-  id          String    @id @default(uuid())
-  serviceId   String    @map("service_id")
-  priceType   PriceType @map("price_type")
-  price       Decimal   @db.Decimal(10, 2)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
-  service     Service   @relation(fields: [serviceId], references: [id])
-
-  @@map("price_chart")
 }
 
 model Booking {

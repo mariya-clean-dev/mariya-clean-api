@@ -20,22 +20,22 @@ export class ServicesService {
     return this.prisma.service.create({
       data: {
         ...serviceData,
-        ...(categoryIds && {
-          categories: {
-            create: categoryIds.map((categoryId) => ({
-              category: {
-                connect: { id: categoryId },
-              },
-            })),
-          },
-        }),
+        // ...(categoryIds && {
+        //   categories: {
+        //     create: categoryIds.map((categoryId) => ({
+        //       category: {
+        //         connect: { id: categoryId },
+        //       },
+        //     })),
+        //   },
+        // }),
       },
       include: {
-        categories: {
-          include: {
-            category: true,
-          },
-        },
+        // categories: {
+        //   include: {
+        //     category: true,
+        //   },
+        // },
       },
     });
   }
@@ -44,13 +44,13 @@ export class ServicesService {
     return this.prisma.service.findMany({
       where: includeInactive ? {} : { isActive: true },
       include: {
-        categories: {
-          include: {
-            category: true,
-          },
-        },
-        basePlans: true,
-        priceCharts: true,
+        // categories: {
+        //   include: {
+        //     category: true,
+        //   },
+        // },
+        // basePlans: true,
+        // priceCharts: true,
         serviceAddOns: true,
       },
     });
@@ -60,13 +60,13 @@ export class ServicesService {
     const service = await this.prisma.service.findUnique({
       where: { id },
       include: {
-        categories: {
-          include: {
-            category: true,
-          },
-        },
-        basePlans: true,
-        priceCharts: true,
+        // categories: {
+        //   include: {
+        //     category: true,
+        //   },
+        // },
+        // basePlans: true,
+        // priceCharts: true,
         serviceAddOns: true,
       },
     });
@@ -78,49 +78,49 @@ export class ServicesService {
     return service;
   }
 
-  async update(id: string, updateServiceDto: UpdateServiceDto) {
-    // Check if service exists
-    await this.findOne(id);
+  // async update(id: string, updateServiceDto: UpdateServiceDto) {
+  //   // Check if service exists
+  //   await this.findOne(id);
 
-    // Extract category IDs if provided
-    const { categoryIds, ...serviceData } = updateServiceDto;
+  //   // Extract category IDs if provided
+  //   const { categoryIds, ...serviceData } = updateServiceDto;
 
-    // If categories are provided, update them
-    if (categoryIds) {
-      // Delete existing mappings
-      await this.prisma.serviceCategoryMapping.deleteMany({
-        where: { serviceId: id },
-      });
+  //   // If categories are provided, update them
+  //   if (categoryIds) {
+  //     // Delete existing mappings
+  //     await this.prisma.serviceCategoryMapping.deleteMany({
+  //       where: { serviceId: id },
+  //     });
 
-      // Create new mappings
-      await Promise.all(
-        categoryIds.map((categoryId) =>
-          this.prisma.serviceCategoryMapping.create({
-            data: {
-              service: { connect: { id } },
-              category: { connect: { id: categoryId } },
-            },
-          }),
-        ),
-      );
-    }
+  //     // Create new mappings
+  //     await Promise.all(
+  //       categoryIds.map((categoryId) =>
+  //         this.prisma.serviceCategoryMapping.create({
+  //           data: {
+  //             service: { connect: { id } },
+  //             category: { connect: { id: categoryId } },
+  //           },
+  //         }),
+  //       ),
+  //     );
+  //   }
 
-    // Update service
-    return this.prisma.service.update({
-      where: { id },
-      data: serviceData,
-      include: {
-        categories: {
-          include: {
-            category: true,
-          },
-        },
-        basePlans: true,
-        priceCharts: true,
-        serviceAddOns: true,
-      },
-    });
-  }
+  //   // Update service
+  //   return this.prisma.service.update({
+  //     where: { id },
+  //     data: serviceData,
+  //     include: {
+  //       // categories: {
+  //       //   include: {
+  //       //     category: true,
+  //       //   },
+  //       // },
+  //       // basePlans: true,
+  //       // priceCharts: true,
+  //       serviceAddOns: true,
+  //     },
+  //   });
+  // }
 
   async remove(id: string) {
     // Check if service exists
@@ -132,80 +132,80 @@ export class ServicesService {
     });
   }
 
-  async addPriceChart(serviceId: string, priceType: PriceType, price: number) {
-    // Check if service exists
-    await this.findOne(serviceId);
+  // async addPriceChart(serviceId: string, priceType: PriceType, price: number) {
+  //   // Check if service exists
+  //   await this.findOne(serviceId);
 
-    // Add price chart
-    return this.prisma.priceChart.create({
-      data: {
-        service: { connect: { id: serviceId } },
-        priceType,
-        price,
-      },
-    });
-  }
+  //   // Add price chart
+  //   return this.prisma.priceChart.create({
+  //     data: {
+  //       service: { connect: { id: serviceId } },
+  //       priceType,
+  //       price,
+  //     },
+  //   });
+  // }
 
-  async addBasePlan(
-    serviceId: string,
-    regionId: string,
-    minimumArea: number,
-    maximumArea: number,
-    price: number,
-    currency: string = 'USD',
-  ) {
-    // Check if service exists
-    await this.findOne(serviceId);
+  // async addBasePlan(
+  //   serviceId: string,
+  //   regionId: string,
+  //   minimumArea: number,
+  //   maximumArea: number,
+  //   price: number,
+  //   currency: string = 'USD',
+  // ) {
+  //   // Check if service exists
+  //   await this.findOne(serviceId);
 
-    // Check if region exists
-    const region = await this.prisma.region.findUnique({
-      where: { id: regionId },
-    });
+  //   // Check if region exists
+  //   const region = await this.prisma.region.findUnique({
+  //     where: { id: regionId },
+  //   });
 
-    if (!region) {
-      throw new NotFoundException(`Region with ID ${regionId} not found`);
-    }
+  //   if (!region) {
+  //     throw new NotFoundException(`Region with ID ${regionId} not found`);
+  //   }
 
-    // Check if there's overlap with existing plans
-    const existingPlan = await this.prisma.basePlan.findFirst({
-      where: {
-        serviceId,
-        regionId,
-        OR: [
-          {
-            minimumArea: { lte: minimumArea },
-            maximumArea: { gte: minimumArea },
-          },
-          {
-            minimumArea: { lte: maximumArea },
-            maximumArea: { gte: maximumArea },
-          },
-          {
-            minimumArea: { gte: minimumArea },
-            maximumArea: { lte: maximumArea },
-          },
-        ],
-      },
-    });
+  //   // Check if there's overlap with existing plans
+  //   const existingPlan = await this.prisma.basePlan.findFirst({
+  //     where: {
+  //       serviceId,
+  //       regionId,
+  //       OR: [
+  //         {
+  //           minimumArea: { lte: minimumArea },
+  //           maximumArea: { gte: minimumArea },
+  //         },
+  //         {
+  //           minimumArea: { lte: maximumArea },
+  //           maximumArea: { gte: maximumArea },
+  //         },
+  //         {
+  //           minimumArea: { gte: minimumArea },
+  //           maximumArea: { lte: maximumArea },
+  //         },
+  //       ],
+  //     },
+  //   });
 
-    if (existingPlan) {
-      throw new BadRequestException(
-        `There's an overlapping base plan for this service and region`,
-      );
-    }
+  //   if (existingPlan) {
+  //     throw new BadRequestException(
+  //       `There's an overlapping base plan for this service and region`,
+  //     );
+  //   }
 
-    // Add base plan
-    return this.prisma.basePlan.create({
-      data: {
-        service: { connect: { id: serviceId } },
-        region: { connect: { id: regionId } },
-        minimumArea,
-        maximumArea,
-        price,
-        currency,
-      },
-    });
-  }
+  //   // Add base plan
+  //   return this.prisma.basePlan.create({
+  //     data: {
+  //       service: { connect: { id: serviceId } },
+  //       region: { connect: { id: regionId } },
+  //       minimumArea,
+  //       maximumArea,
+  //       price,
+  //       currency,
+  //     },
+  //   });
+  // }
 
   async addServiceAddOn(
     serviceId: string,
@@ -236,24 +236,8 @@ export class ServicesService {
     // Check if service exists
     const service = await this.findOne(serviceId);
 
-    // Find base plan for the area size and region
-    const basePlan = await this.prisma.basePlan.findFirst({
-      where: {
-        serviceId,
-        regionId,
-        minimumArea: { lte: areaSize },
-        maximumArea: { gte: areaSize },
-      },
-    });
-
-    if (!basePlan) {
-      throw new NotFoundException(
-        `No base plan found for service ${serviceId} with area ${areaSize} in the specified region`,
-      );
-    }
-
     // Calculate base price
-    let totalPrice = Number(basePlan.price);
+    let totalPrice = Number(service.base_price);
 
     // Add price for add-ons if specified
     if (addOnIds.length > 0) {
@@ -281,55 +265,55 @@ export class ServicesService {
       serviceId,
       serviceName: service.name,
       areaSize,
-      basePlanPrice: basePlan.price,
-      currency: basePlan.currency,
+      basePlanPrice: service.base_price,
+      currency: 'usd',
       addOns: addOnIds.length > 0 ? addOnIds : [],
       totalPrice,
     };
   }
 
-  async getCategories() {
-    return this.prisma.serviceCategory.findMany();
-  }
+  // async getCategories() {
+  //   return this.prisma.serviceCategory.findMany();
+  // }
 
-  async createCategory(name: string, description?: string) {
-    return this.prisma.serviceCategory.create({
-      data: {
-        name,
-        description,
-      },
-    });
-  }
+  // async createCategory(name: string, description?: string) {
+  //   return this.prisma.serviceCategory.create({
+  //     data: {
+  //       name,
+  //       description,
+  //     },
+  //   });
+  // }
 
-  async updateCategory(id: string, name?: string, description?: string) {
-    const category = await this.prisma.serviceCategory.findUnique({
-      where: { id },
-    });
+  // async updateCategory(id: string, name?: string, description?: string) {
+  //   const category = await this.prisma.serviceCategory.findUnique({
+  //     where: { id },
+  //   });
 
-    if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
-    }
+  //   if (!category) {
+  //     throw new NotFoundException(`Category with ID ${id} not found`);
+  //   }
 
-    return this.prisma.serviceCategory.update({
-      where: { id },
-      data: {
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-      },
-    });
-  }
+  //   return this.prisma.serviceCategory.update({
+  //     where: { id },
+  //     data: {
+  //       ...(name && { name }),
+  //       ...(description !== undefined && { description }),
+  //     },
+  //   });
+  // }
 
-  async removeCategory(id: string) {
-    const category = await this.prisma.serviceCategory.findUnique({
-      where: { id },
-    });
+  // async removeCategory(id: string) {
+  //   const category = await this.prisma.serviceCategory.findUnique({
+  //     where: { id },
+  //   });
 
-    if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
-    }
+  //   if (!category) {
+  //     throw new NotFoundException(`Category with ID ${id} not found`);
+  //   }
 
-    return this.prisma.serviceCategory.delete({
-      where: { id },
-    });
-  }
+  //   return this.prisma.serviceCategory.delete({
+  //     where: { id },
+  //   });
+  // }
 }
