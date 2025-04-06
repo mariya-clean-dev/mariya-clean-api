@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/buspay/buspay_server
+            cd /var/www/mariya-cleaning/mariya-clean-api
             git pull origin main
             npm install
             npm run build || echo "Build script missing!"
