@@ -35,5 +35,6 @@ jobs:
             git pull origin main
             npm install
             npm run build || echo "Build script missing!"
-            npm run typeorm:run-migrations || echo "Migration script missing!"
+            npx prisma migrate deploy || echo "Migration failed or not needed"
             pm2 restart buspay_server
+
