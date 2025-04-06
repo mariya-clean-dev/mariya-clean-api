@@ -277,6 +277,32 @@ export class PaymentsService {
     return customer.id;
   }
 
+  async saveTransaction(data: {
+    bookingId: string;
+    stripeInvoiceId?: string;
+    stripePaymentId?: string;
+    amount: number | string;
+    currency: string;
+    status: TransactionStatus;
+    paymentMethod: string;
+    transactionType: string;
+    failureReason?: string;
+  }) {
+    return this.prisma.transaction.create({
+      data: {
+        bookingId: data.bookingId,
+        stripeInvoiceId: data.stripeInvoiceId ?? null,
+        stripePaymentId: data.stripePaymentId ?? null,
+        amount: data.amount,
+        currency: data.currency,
+        status: data.status,
+        paymentMethod: data.paymentMethod,
+        transactionType: data.transactionType,
+        failureReason: data.failureReason ?? null,
+      },
+    });
+  }
+
   async processPayment(createPaymentDto: CreatePaymentDto, userId: string) {
     // Check if booking exists
     const booking = await this.prisma.booking.findUnique({
@@ -343,8 +369,10 @@ export class PaymentsService {
           amount: bookingPrice,
           currency: 'usd',
           status: TransactionStatus.pending,
-          paymentMethod: createPaymentDto.paymentMethod,
-          transactionType: 'payment',
+          paymentMethod: createPaymentDto.paymentMethod
+            ? createPaymentDto.paymentMethod
+            : 'online',
+          transactionType: createPaymentDto.transactionType,
         },
         include: {
           booking: {

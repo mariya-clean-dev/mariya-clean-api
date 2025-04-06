@@ -62,23 +62,11 @@ export class AuthService {
       where: { email },
     });
 
-    const role = await this.prisma.role.findUnique({
-      where: { name: registerDto.roleName },
-    });
-
-    if (!role) {
-      throw new NotFoundException(
-        `Invalid Role... available roles: 'admin','staff','customer'`,
-      );
-    }
-
     if (existingUser) {
       throw new ConflictException('Email already in use');
     }
-    delete registerDto.roleName;
     // Create user
     const user = await this.usersService.create({
-      roleId: role.id,
       ...registerDto,
     });
 

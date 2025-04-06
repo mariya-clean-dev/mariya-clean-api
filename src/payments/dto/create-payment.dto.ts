@@ -6,8 +6,12 @@ export class CreatePaymentDto {
   bookingId: string;
 
   @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsString()
   @IsNotEmpty()
-  paymentMethod: string;
+  transactionType: string;
 
   @IsString()
   @IsOptional()

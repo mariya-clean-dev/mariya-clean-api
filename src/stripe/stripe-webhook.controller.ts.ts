@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionStatus } from '@prisma/client';
 
-@Controller('webhooks/stripe')
+@Controller('webhooks')
 export class StripeWebhookController {
   constructor(
     private readonly stripeService: StripeService,
@@ -23,7 +23,7 @@ export class StripeWebhookController {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Post()
+  @Post('stripe')
   async handleWebhook(
     @Headers('stripe-signature') signature: string,
     @Req() req: RawBodyRequest<Request>,

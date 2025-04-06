@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -19,6 +20,17 @@ export class UsersService {
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
+
+    const role = await this.prisma.role.findUnique({
+      where: { name: createUserDto.role },
+    });
+
+    if (!role) {
+      throw new ConflictException(
+        `Invalid Role... available roles: 'admin','staff','customer'`,
+      );
+    }
+    delete createUserDto.role;
 
     if (existingUser) {
       throw new ConflictException('Email already in use');
@@ -34,6 +46,9 @@ export class UsersService {
     const user = await this.prisma.user.create({
       data: {
         ...createUserDto,
+        role: {
+          connect: { id: role.id },
+        },
         password: hashedPassword,
       },
       include: {
@@ -113,6 +128,19 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    return user;
+  }
+
+  async findOrCreateUser(data: {
+    email: string;
+    name: string;
+    role: string;
+    phone?: string;
+  }) {
+    let user: any = await this.findByEmail(data.email);
+    if (!user) {
+      user = await this.create(data);
+    }
     return user;
   }
 

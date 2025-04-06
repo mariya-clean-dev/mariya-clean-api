@@ -18,6 +18,10 @@ export class CreateSubscriptionDto {
   @IsNotEmpty()
   recurringType: RecurringType;
 
+  @IsString()
+  @IsNotEmpty()
+  status: string;
+
   @IsNumber()
   @IsNotEmpty()
   @Min(1)
@@ -25,7 +29,11 @@ export class CreateSubscriptionDto {
 
   @IsISO8601()
   @IsNotEmpty()
-  startDate: string;
+  startDate: Date;
+
+  @IsISO8601()
+  @IsOptional()
+  nextBillingDate: Date;
 
   @IsString()
   @IsOptional()
