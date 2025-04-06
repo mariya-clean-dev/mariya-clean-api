@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { UpdateScheduleDto } from './dto/update-scheduler.dto';
@@ -141,6 +145,23 @@ export class SchedulerService {
       orderBy: {
         startTime: 'asc',
       },
+    });
+  }
+
+  async findMonthSchedules(startDate: Date, endDate: Date) {
+    let where: any;
+    if (startDate || endDate) {
+      where.startTime = {};
+      if (startDate) {
+        where.startTime.gte = startDate;
+      }
+      if (endDate) {
+        where.startTime.lte = endDate;
+      }
+    }
+
+    return this.prisma.monthSchedule.findMany({
+      where,
     });
   }
 

@@ -17,6 +17,7 @@ import { UpdateScheduleDto } from './dto/update-scheduler.dto';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
@@ -43,6 +44,15 @@ export class SchedulerController {
       startDate,
       endDate,
     );
+  }
+
+  @Get('month-schedules')
+  @Public()
+  getMonthSchedules(
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+  ) {
+    return this.schedulerService.findMonthSchedules(startDate, endDate);
   }
 
   @Get('schedules/:id')

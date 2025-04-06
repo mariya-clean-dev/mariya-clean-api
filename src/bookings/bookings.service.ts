@@ -29,6 +29,13 @@ export class BookingsService {
       );
     }
 
+    const subscriptionType = await this.prisma.subscriptionType.findUnique({
+      where: { id: createBookingDto.subscriptionTypeId },
+    });
+    if (!subscriptionType) {
+      throw new NotFoundException(`Subscription type not found`);
+    }
+
     // If subscription is provided, check if it exists and belongs to user
     if (createBookingDto.subscriptionId) {
       const subscription = await this.prisma.subscription.findFirst({
@@ -50,12 +57,21 @@ export class BookingsService {
       }
     }
 
-    // Parse scheduled date
-    const scheduledDate = new Date(createBookingDto.scheduledDate);
+    const formattedAddress = {
+      line_1: createBookingDto.address.addressLine1,
+      line_2: createBookingDto.address.addressLine2,
+    };
 
-    // Calculate modification deadline (2 days before scheduled date)
-    const modificationDeadline = new Date(scheduledDate);
-    modificationDeadline.setDate(scheduledDate.getDate() - 2);
+    const specialInstructions = createBookingDto.address.specialInstructions;
+
+    delete createBookingDto.address.specialInstructions;
+    delete createBookingDto.address.addressLine1;
+    delete createBookingDto.address.addressLine2;
+
+    const addressData = {
+      ...createBookingDto.address,
+      ...formattedAddress,
+    };
 
     // Create booking
     const booking = await this.prisma.booking.create({
@@ -67,18 +83,21 @@ export class BookingsService {
         isEco: createBookingDto.isEco || false,
         status: BookingStatus.booked,
         price: createBookingDto.price,
-        modificationDeadline,
-        subscriptionId: createBookingDto.subscriptionId,
-        // bookingAddress: {
-        //   create: {
-        //     address: {
-        //       connect: {
-        //         id: createBookingDto.addressId,
-        //       },
-        //     },
-        //     specialInstructions: createBookingDto.address?.specialInstructions,
-        //   },
-        // },
+        subscriptionId: createBookingDto.subscriptionId
+          ? createBookingDto.subscriptionId
+          : null,
+        subscriptionTypeId: subscriptionType.id,
+        bookingAddress: {
+          create: {
+            address: {
+              create: {
+                ...addressData,
+                userId,
+              },
+            },
+            specialInstructions,
+          },
+        },
         bookingLogs: {
           create: {
             status: BookingStatus.booked,
@@ -86,20 +105,11 @@ export class BookingsService {
             changedBy: userId,
           },
         },
-        schedules: {
-          create: {
-            staffId: userId, // Placeholder until staff is assigned
-            startTime: scheduledDate,
-            endTime: new Date(
-              scheduledDate.getTime() + service.durationMinutes * 60000,
-            ),
-          },
-        },
       },
       include: {
         bookingAddress: true,
         service: true,
-        schedules: true,
+        subscriptionType: true,
       },
     });
 
@@ -266,13 +276,6 @@ export class BookingsService {
 
     // Check if booking can be modified (before modification deadline)
     if (updateBookingDto.scheduledDate && role === 'customer') {
-      const now = new Date();
-      if (now > booking.modificationDeadline) {
-        throw new ForbiddenException(
-          'Booking can no longer be modified (past the 2-day buffer)',
-        );
-      }
-
       // Parse new scheduled date
       const newScheduledDate = new Date(updateBookingDto.scheduledDate);
 
@@ -466,16 +469,6 @@ export class BookingsService {
     // Check if booking can be canceled (not already completed or canceled)
     if (['completed', 'canceled'].includes(booking.status)) {
       throw new ForbiddenException(`Booking is already ${booking.status}`);
-    }
-
-    // Check modification deadline for customers
-    if (role === 'customer') {
-      const now = new Date();
-      if (now > booking.modificationDeadline) {
-        throw new ForbiddenException(
-          'Booking can no longer be canceled (past the 2-day buffer)',
-        );
-      }
     }
 
     // Cancel booking

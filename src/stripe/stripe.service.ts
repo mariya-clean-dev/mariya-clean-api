@@ -10,7 +10,7 @@ export class StripeService {
     this.stripeClient = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY'),
       {
-        apiVersion: '2025-02-24.acacia', 
+        apiVersion: '2025-02-24.acacia',
       },
     );
   }
@@ -108,6 +108,34 @@ export class StripeService {
     return this.stripeClient.paymentMethods.list({
       customer: customerId,
       type,
+    });
+  }
+
+  async createCheckoutSession({
+    customer,
+    priceId,
+    metadata,
+    successUrl,
+    cancelUrl,
+  }: {
+    customer: string;
+    priceId: string;
+    metadata: Record<string, string>;
+    successUrl: string;
+    cancelUrl: string;
+  }) {
+    return await this.stripeClient.checkout.sessions.create({
+      mode: 'subscription',
+      customer,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      metadata,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     });
   }
 

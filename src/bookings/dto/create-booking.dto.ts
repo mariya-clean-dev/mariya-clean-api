@@ -9,22 +9,49 @@ import {
   ValidateNested,
   IsISO8601,
   IsArray,
+  IsEmail,
+  IsInt,
+  ValidateIf,
 } from 'class-validator';
 import { ServiceType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
-class BookingAddressDto {
+export class BookingScheduleDto {
+  @IsInt()
+  weekOfMonth: number;
+
+  @IsInt()
+  dayOfWeek: number;
+
   @IsString()
   @IsNotEmpty()
-  street: string;
+  time: string;
+}
+
+class BookingAddressDto {
+  @IsString()
+  @IsOptional()
+  street?: string;
+
+  @IsString()
+  @IsOptional()
+  landmark?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  addressLine1: string;
+
+  @IsString()
+  @IsOptional()
+  addressLine2?: string;
 
   @IsString()
   @IsNotEmpty()
   city: string;
 
   @IsString()
-  @IsNotEmpty()
-  state: string;
+  @IsOptional()
+  state?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -60,9 +87,9 @@ export class CreateBookingDto {
   @IsNotEmpty()
   price: number;
 
-  @IsISO8601()
+  @IsString()
   @IsNotEmpty()
-  scheduledDate: string;
+  subscriptionTypeId: string;
 
   @ValidateNested()
   @Type(() => BookingAddressDto)
@@ -71,4 +98,39 @@ export class CreateBookingDto {
   @IsArray()
   @IsOptional()
   addOnIds?: string[];
+
+  //add user details
+
+  @IsString()
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @ValidateNested()
+  @Type(() => BookingScheduleDto)
+  @IsNotEmpty()
+  schedule_1: BookingScheduleDto;
+
+  @ValidateIf((o) => o.schedule_1)
+  @ValidateNested()
+  @Type(() => BookingScheduleDto)
+  @IsOptional()
+  schedule_2?: BookingScheduleDto;
+
+  @ValidateIf((o) => o.schedule_2)
+  @ValidateNested()
+  @Type(() => BookingScheduleDto)
+  @IsOptional()
+  schedule_3?: BookingScheduleDto;
+
+  @ValidateIf((o) => o.schedule_3)
+  @ValidateNested()
+  @Type(() => BookingScheduleDto)
+  @IsOptional()
+  schedule_4?: BookingScheduleDto;
 }

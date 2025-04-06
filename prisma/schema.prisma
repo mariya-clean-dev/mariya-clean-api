@@ -73,62 +73,65 @@ model Role {
   name      String   @unique
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-  users     User[]   
+  users     User[]
 
-  @@map("roles") 
+  @@map("roles")
 }
 
 model Region {
-  id          String        @id @default(uuid())
-  name        String
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
-  UserRegion  UserRegion[]
+  id         String       @id @default(uuid())
+  name       String
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @default(now()) @updatedAt @map("updated_at")
+  UserRegion UserRegion[]
 
   @@map("regions")
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  name               String
-  email              String              @unique
-  phone              String?
-  status             UserStatus          @default(active)
-  password           String?
-  otp                String?
-  otpExpiry          DateTime?           @map("otp_expiry")
-  roleId             String              @map("role_id")
-  stripeCustomerId   String?             @map("stripe_customer_id") // Added for Stripe
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at")
-  role               Role                @relation(fields: [roleId], references: [id])
-  addresses          Address[]
-  userRegions        UserRegion[]
-  customerBookings   Booking[]           @relation("CustomerBookings")
-  staffAssignments   Booking[]           @relation("StaffAssignments")
-  bookingLogs        BookingLog[]
-  reviews            Review[]            @relation("UserReviews")
-  receivedReviews    Review[]            @relation("StaffReviews")
-  subscriptions      Subscription[]
-  schedules          Schedule[]
-  staffAvailability  StaffAvailability[]
-  staffPerformance   StaffPerformance[]
-  notifications      Notification[]
+  id                String              @id @default(uuid())
+  name              String
+  email             String              @unique
+  phone             String?
+  status            UserStatus          @default(active)
+  password          String?
+  otp               String?
+  otpExpiry         DateTime?           @map("otp_expiry")
+  roleId            String              @map("role_id")
+  stripeCustomerId  String?             @map("stripe_customer_id") // Added for Stripe
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
+  role              Role                @relation(fields: [roleId], references: [id])
+  addresses         Address[]
+  userRegions       UserRegion[]
+  customerBookings  Booking[]           @relation("CustomerBookings")
+  staffAssignments  Booking[]           @relation("StaffAssignments")
+  bookingLogs       BookingLog[]
+  reviews           Review[]            @relation("UserReviews")
+  receivedReviews   Review[]            @relation("StaffReviews")
+  subscriptions     Subscription[]
+  schedules         Schedule[]
+  staffAvailability StaffAvailability[]
+  staffPerformance  StaffPerformance[]
+  notifications     Notification[]
 
   @@map("users")
 }
 
 model Address {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  street      String
-  city        String
-  state       String
-  zip         String
-  isDefault   Boolean  @default(false) @map("is_default")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
-  user        User     @relation(fields: [userId], references: [id])
+  id               String           @id @default(uuid())
+  userId           String           @map("user_id")
+  landmark         String?
+  line_1           String
+  line_2           String?
+  street           String?
+  city             String
+  state            String?
+  zip              String
+  isDefault        Boolean          @default(false) @map("is_default")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at")
+  user             User             @relation(fields: [userId], references: [id])
   bookingAddresses BookingAddress[]
 
   @@map("addresses")
@@ -147,65 +150,80 @@ model UserRegion {
 }
 
 model Service {
-  id                   String                   @id @default(uuid())
-  name                 String
-  description          String?                  @db.Text
-  durationMinutes      Int                      @map("duration_minutes")
-  base_price           Decimal                  @db.Decimal(10, 2)
-  bathroom_rate        Decimal                  @db.Decimal(10, 2)
-  room_rate            Decimal                  @db.Decimal(10, 2)
-  square_foot_price    Decimal                  @db.Decimal(10, 2)
-  isActive             Boolean                  @default(true) @map("is_active")
-  stripeProductId      String?                  @map("stripe_product_id") // Added for Stripe
-  stripePriceId        String?                  @map("stripe_price_id") // Added for Stripe
-  createdAt            DateTime                 @default(now()) @map("created_at")
-  updatedAt            DateTime                 @default(now()) @updatedAt @map("updated_at")
-  bookings             Booking[]
-  subscriptions        Subscription[]
-  serviceAddOns        ServiceAddOn[]
+  id                String         @id @default(uuid())
+  name              String
+  description       String?        @db.Text
+  durationMinutes   Int            @map("duration_minutes")
+  base_price        Decimal        @db.Decimal(10, 2)
+  bathroom_rate     Decimal        @db.Decimal(10, 2)
+  room_rate         Decimal        @db.Decimal(10, 2)
+  square_foot_price Decimal        @db.Decimal(10, 2)
+  isActive          Boolean        @default(true) @map("is_active")
+  stripeProductId   String?        @map("stripe_product_id") // Added for Stripe
+  stripePriceId     String?        @map("stripe_price_id") // Added for Stripe
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at")
+  bookings          Booking[]
+  subscriptions     Subscription[]
+  serviceAddOns     ServiceAddOn[]
 
   @@map("services")
 }
 
 model Booking {
-  id                   String            @id @default(uuid())
-  userId               String            @map("user_id")
-  type                 ServiceType
-  serviceId            String            @map("service_id")
-  subscriptionId       String?           @map("subscription_id")
-  subscriptionTypeId   String?           @map("subscription_type_id")
-  assignedStaffId      String?           @map("assigned_staff_id")
-  areaSize             Int               @map("area_size")
-  isEco                Boolean           @map("is_eco")
-  status               BookingStatus
-  price                Decimal           @db.Decimal(10, 2)
-  modificationDeadline DateTime          @map("modification_deadline")
-  createdAt            DateTime          @default(now()) @map("created_at")
-  updatedAt            DateTime          @default(now()) @updatedAt @map("updated_at")
-  customer             User              @relation("CustomerBookings", fields: [userId], references: [id])
-  assignedStaff        User?             @relation("StaffAssignments", fields: [assignedStaffId], references: [id])
-  service              Service           @relation(fields: [serviceId], references: [id])
-  subscription         Subscription?     @relation(fields: [subscriptionId], references: [id])
-  subscriptionType SubscriptionType? @relation("SubscriptionTypeBookings", fields: [subscriptionTypeId], references: [id])
-  bookingAddress       BookingAddress?
-  bookingLogs          BookingLog[]
-  transactions         Transaction[]
-  schedules            Schedule[]
-  review               Review?
-  bookingAddOns        BookingAddOn[]
-  notifications        Notification[]
+  id                 String            @id @default(uuid())
+  userId             String            @map("user_id")
+  type               ServiceType
+  serviceId          String            @map("service_id")
+  subscriptionId     String?           @map("subscription_id")
+  subscriptionTypeId String?           @map("subscription_type_id")
+  assignedStaffId    String?           @map("assigned_staff_id")
+  areaSize           Int               @map("area_size")
+  isEco              Boolean           @map("is_eco")
+  status             BookingStatus
+  price              Decimal           @db.Decimal(10, 2)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at")
+  customer           User              @relation("CustomerBookings", fields: [userId], references: [id])
+  assignedStaff      User?             @relation("StaffAssignments", fields: [assignedStaffId], references: [id])
+  service            Service           @relation(fields: [serviceId], references: [id])
+  subscription       Subscription?     @relation(fields: [subscriptionId], references: [id])
+  subscriptionType   SubscriptionType? @relation("SubscriptionTypeBookings", fields: [subscriptionTypeId], references: [id])
+  bookingAddress     BookingAddress?
+  bookingLogs        BookingLog[]
+  transactions       Transaction[]
+  schedules          Schedule[]
+  review             Review?
+  bookingAddOns      BookingAddOn[]
+  notifications      Notification[]
+  monthSchedules     MonthSchedule[]
 
   @@map("bookings")
 }
 
+model MonthSchedule {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  weekOfMonth Int      @map("week_of_month")
+  dayOfWeek   Int      @map("day_of_week") // 0 (Sunday) - 6 (Saturday)
+  time        String   @map("time")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("month_schedules")
+}
+
 model BookingAddress {
   id                  String   @id @default(uuid())
-bookingId             String @map("booking_id") @unique
+  bookingId           String   @unique @map("booking_id")
   addressId           String   @map("address_id")
-  specialInstructions String?  @db.Text @map("special_instructions")
+  specialInstructions String?  @map("special_instructions") @db.Text
   createdAt           DateTime @default(now()) @map("created_at")
   booking             Booking  @relation(fields: [bookingId], references: [id])
   address             Address  @relation(fields: [addressId], references: [id])
+
   @@map("booking_addresses")
 }
 
@@ -222,19 +240,19 @@ model BookingLog {
 }
 
 model Transaction {
-  id               String            @id @default(uuid())
-  bookingId        String            @map("booking_id")
-  stripeInvoiceId  String?           @map("stripe_invoice_id")
-  stripePaymentId  String?           @map("stripe_payment_id")
-  amount           Decimal           @db.Decimal(10, 2)
-  currency         String
-  status           TransactionStatus
-  paymentMethod    String            @map("payment_method")
-  transactionType  String            @map("transaction_type")
-  failureReason    String?           @db.Text @map("failure_reason")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
-  booking          Booking           @relation(fields: [bookingId], references: [id])
+  id              String            @id @default(uuid())
+  bookingId       String            @map("booking_id")
+  stripeInvoiceId String?           @map("stripe_invoice_id")
+  stripePaymentId String?           @map("stripe_payment_id")
+  amount          Decimal           @db.Decimal(10, 2)
+  currency        String
+  status          TransactionStatus
+  paymentMethod   String            @map("payment_method")
+  transactionType String            @map("transaction_type")
+  failureReason   String?           @map("failure_reason") @db.Text
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at")
+  booking         Booking           @relation(fields: [bookingId], references: [id])
 
   @@map("transactions")
 }
@@ -285,37 +303,37 @@ model Review {
 }
 
 model Subscription {
-  id                  String             @id @default(uuid())
-  userId              String             @map("user_id")
-  serviceId           String             @map("service_id")
-  status              SubscriptionStatus
-  stripeSubscriptionId String?           @map("stripe_subscription_id")
-  recurringType       RecurringType      @map("recurring_type")
-  recurringFrequency  Int                @map("recurring_frequency")
-  startDate           DateTime           @map("start_date")
-  endDate             DateTime?          @map("end_date")
-  nextBillingDate     DateTime           @map("next_billing_date")
-  cancellationReason  String?            @db.Text @map("cancellation_reason")
-  createdAt           DateTime           @default(now()) @map("created_at")
-  user                User               @relation(fields: [userId], references: [id])
-  service             Service            @relation(fields: [serviceId], references: [id])
-  bookings            Booking[]
+  id                   String             @id @default(uuid())
+  userId               String             @map("user_id")
+  serviceId            String             @map("service_id")
+  status               SubscriptionStatus
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  recurringType        RecurringType      @map("recurring_type")
+  recurringFrequency   Int                @map("recurring_frequency")
+  startDate            DateTime           @map("start_date")
+  endDate              DateTime?          @map("end_date")
+  nextBillingDate      DateTime           @map("next_billing_date")
+  cancellationReason   String?            @map("cancellation_reason") @db.Text
+  createdAt            DateTime           @default(now()) @map("created_at")
+  user                 User               @relation(fields: [userId], references: [id])
+  service              Service            @relation(fields: [serviceId], references: [id])
+  bookings             Booking[]
 
   @@map("subscriptions")
 }
 
 model SubscriptionType {
-  id                 String   @id @default(uuid())
-  name               String   @unique
-  description        String?  @db.Text
-  recurringFrequency Int      @map("recurring_frequency")
-  available_discount Decimal  @default(0) @db.Decimal(3, 1)
-  bookings Booking[] @relation("SubscriptionTypeBookings")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  name               String    @unique
+  description        String?   @db.Text
+  recurringFrequency Int       @map("recurring_frequency")
+  available_discount Decimal   @default(0) @db.Decimal(3, 1)
+  bookings           Booking[] @relation("SubscriptionTypeBookings")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@map("subscription_type")
-} 
+}
 
 model StaffPerformance {
   id                    String   @id @default(uuid())
@@ -323,8 +341,8 @@ model StaffPerformance {
   month                 DateTime @db.Date
   completedBookings     Int      @map("completed_bookings")
   averageCompletionTime Int      @map("average_completion_time")
-  onTimePercentage      Decimal  @db.Decimal(5, 2) @map("on_time_percentage")
-  ratingAverage         Decimal  @db.Decimal(3, 1) @map("rating_average")
+  onTimePercentage      Decimal  @map("on_time_percentage") @db.Decimal(5, 2)
+  ratingAverage         Decimal  @map("rating_average") @db.Decimal(3, 1)
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
   staff                 User     @relation(fields: [staffId], references: [id])
@@ -348,14 +366,14 @@ model Notification {
 }
 
 model ServiceAddOn {
-  id          String        @id @default(uuid())
-  serviceId   String        @map("service_id")
-  name        String
-  description String?       @db.Text
-  price       Decimal       @db.Decimal(10, 2)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
-  service     Service       @relation(fields: [serviceId], references: [id])
+  id            String         @id @default(uuid())
+  serviceId     String         @map("service_id")
+  name          String
+  description   String?        @db.Text
+  price         Decimal        @db.Decimal(10, 2)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at")
+  service       Service        @relation(fields: [serviceId], references: [id])
   bookingAddOns BookingAddOn[]
 
   @@map("service_add_ons")
