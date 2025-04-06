@@ -5,9 +5,16 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StripeModule } from 'src/stripe/stripe.module';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { ResponseModule } from 'src/response/response.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, StripeModule, PaymentsModule],
+  imports: [
+    PrismaModule,
+    NotificationsModule,
+    StripeModule,
+    PaymentsModule,
+    ResponseModule,
+  ],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService],

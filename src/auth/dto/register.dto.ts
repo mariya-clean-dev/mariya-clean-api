@@ -17,7 +17,7 @@ export class RegisterDto {
   email: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MinLength(8)
   password: string;
 
@@ -27,5 +27,5 @@ export class RegisterDto {
 
   @IsString()
   @IsNotEmpty()
-  roleId: string;
+  roleName: string;
 }

@@ -56,27 +56,6 @@ async function main() {
     },
   });
 
-  // Create service categories
-  const regularCategory = await prisma.serviceCategory.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      name: 'Regular Cleaning',
-      description: 'Standard cleaning services for homes',
-    },
-  });
-
-  const deepCategory = await prisma.serviceCategory.upsert({
-    where: { id: '2' },
-    update: {},
-    create: {
-      id: '2',
-      name: 'Deep Cleaning',
-      description: 'Thorough cleaning for homes that need extra attention',
-    },
-  });
-
   // Create services
   const regularService = await prisma.service.upsert({
     where: { id: '1' },
@@ -86,8 +65,11 @@ async function main() {
       name: 'Regular Home Cleaning',
       description: 'Standard cleaning service for homes',
       durationMinutes: 120,
-      monthlySlots: 100,
       isActive: true,
+      base_price: 150,
+      bathroom_rate: 200,
+      room_rate: 300,
+      square_foot_price: 1.5,
     },
   });
 
@@ -99,128 +81,11 @@ async function main() {
       name: 'Deep Home Cleaning',
       description: 'Thorough cleaning service for homes',
       durationMinutes: 240,
-      monthlySlots: 50,
       isActive: true,
-    },
-  });
-
-  // Create service category mappings
-  await prisma.serviceCategoryMapping.upsert({
-    where: {
-      serviceId_categoryId: {
-        serviceId: regularService.id,
-        categoryId: regularCategory.id,
-      },
-    },
-    update: {},
-    create: {
-      serviceId: regularService.id,
-      categoryId: regularCategory.id,
-    },
-  });
-
-  await prisma.serviceCategoryMapping.upsert({
-    where: {
-      serviceId_categoryId: {
-        serviceId: deepService.id,
-        categoryId: deepCategory.id,
-      },
-    },
-    update: {},
-    create: {
-      serviceId: deepService.id,
-      categoryId: deepCategory.id,
-    },
-  });
-
-  // Create base plans
-  await prisma.basePlan.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      serviceId: regularService.id,
-      regionId: region1.id,
-      minimumArea: 500,
-      maximumArea: 1000,
-      price: 100,
-      currency: 'USD',
-    },
-  });
-
-  await prisma.basePlan.upsert({
-    where: { id: '2' },
-    update: {},
-    create: {
-      id: '2',
-      serviceId: regularService.id,
-      regionId: region1.id,
-      minimumArea: 1001,
-      maximumArea: 2000,
-      price: 150,
-      currency: 'USD',
-    },
-  });
-
-  await prisma.basePlan.upsert({
-    where: { id: '3' },
-    update: {},
-    create: {
-      id: '3',
-      serviceId: deepService.id,
-      regionId: region1.id,
-      minimumArea: 500,
-      maximumArea: 1000,
-      price: 180,
-      currency: 'USD',
-    },
-  });
-
-  await prisma.basePlan.upsert({
-    where: { id: '4' },
-    update: {},
-    create: {
-      id: '4',
-      serviceId: deepService.id,
-      regionId: region1.id,
-      minimumArea: 1001,
-      maximumArea: 2000,
-      price: 250,
-      currency: 'USD',
-    },
-  });
-
-  // Create price charts
-  await prisma.priceChart.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      serviceId: regularService.id,
-      priceType: 'per_room',
-      price: 25,
-    },
-  });
-
-  await prisma.priceChart.upsert({
-    where: { id: '2' },
-    update: {},
-    create: {
-      id: '2',
-      serviceId: regularService.id,
-      priceType: 'per_bathroom',
-      price: 30,
-    },
-  });
-
-  await prisma.priceChart.upsert({
-    where: { id: '3' },
-    update: {},
-    create: {
-      id: '3',
-      serviceId: deepService.id,
-      priceType: 'hourly',
-      price: 60,
+      base_price: 190,
+      bathroom_rate: 250,
+      room_rate: 350,
+      square_foot_price: 2.5,
     },
   });
 
@@ -260,6 +125,35 @@ async function main() {
       price: 45,
     },
   });
+
+  const subscriptionPlans = [
+    {
+      name: 'Weekly Plan',
+      description: 'A recurring weekly subscription plan',
+      recurringFrequency: 4, // in days
+      available_discount: 10.0,
+    },
+    {
+      name: 'Bi-Weekly Plan',
+      description: 'A recurring bi-weekly subscription plan',
+      recurringFrequency: 2,
+      available_discount: 5.0,
+    },
+    {
+      name: 'Monthly Plan',
+      description: 'A recurring monthly subscription plan',
+      recurringFrequency: 1,
+      available_discount: 0,
+    },
+  ];
+
+  for (const plan of subscriptionPlans) {
+    await prisma.subscriptionType.upsert({
+      where: { name: plan.name },
+      update: {},
+      create: plan,
+    });
+  }
 
   console.log('Database seeded successfully!');
 }

@@ -28,9 +28,7 @@ export class SubscriptionsService {
     });
 
     if (!service) {
-      throw new NotFoundException(
-        `Service with ID ${createSubscriptionDto.serviceId} not found`,
-      );
+      throw new NotFoundException(`Service not found`);
     }
 
     // Check if the service has a Stripe product and price
@@ -54,16 +52,16 @@ export class SubscriptionsService {
 
     if (!stripePriceId) {
       // Get base price for the service
-      const basePlan = await this.prisma.basePlan.findFirst({
-        where: {
-          serviceId: service.id,
-          // Add any other criteria for selecting the appropriate base plan
-        },
-      });
+      // const basePlan = await this.prisma.basePlan.findFirst({
+      //   where: {
+      //     serviceId: service.id,
+      //     // Add any other criteria for selecting the appropriate base plan
+      //   },
+      // });
 
-      if (!basePlan) {
-        throw new BadRequestException('No pricing found for this service');
-      }
+      // if (!basePlan) {
+      //   throw new BadRequestException('No pricing found for this service');
+      // }
 
       // Determine the recurring interval based on the DTO
       let interval: 'day' | 'week' | 'month' | 'year';
@@ -92,8 +90,8 @@ export class SubscriptionsService {
       // Create price in Stripe
       const price = await this.stripeService.createPrice(
         stripeProductId,
-        Number(basePlan.price),
-        basePlan.currency || 'usd',
+        Number(service.base_price),
+        'usd',
         { interval, interval_count: intervalCount },
       );
       stripePriceId = price.id;
@@ -358,6 +356,10 @@ export class SubscriptionsService {
         createdAt: 'desc',
       },
     });
+  }
+
+  async findAllSubscriptionType() {
+    return await this.prisma.subscriptionType.findMany();
   }
 
   async findOne(id: string, userId?: string) {
