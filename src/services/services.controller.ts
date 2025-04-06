@@ -119,12 +119,16 @@ export class ServicesController {
 
   @Post('price-estimate')
   @Public()
-  getPriceEstimate(@Body() getPriceEstimateDto: GetPriceEstimateDto) {
-    return this.servicesService.getPriceEstimate(
-      getPriceEstimateDto.serviceId,
-      getPriceEstimateDto.areaSize,
-      getPriceEstimateDto.regionId,
-      getPriceEstimateDto.addOnIds,
+  async getPriceEstimate(@Body() getPriceEstimateDto: GetPriceEstimateDto) {
+    const data = await this.servicesService.getPriceEstimate(
+      getPriceEstimateDto.service_id,
+      getPriceEstimateDto.square_feet,
+      getPriceEstimateDto.no_of_rooms,
+      getPriceEstimateDto.no_of_bathrooms,
+    );
+    return this.responseService.successResponse(
+      'price estimation details',
+      data,
     );
   }
 

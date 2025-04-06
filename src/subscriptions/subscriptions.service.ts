@@ -358,6 +358,10 @@ export class SubscriptionsService {
     });
   }
 
+  async findAllSubscriptionType() {
+    return await this.prisma.subscriptionType.findMany();
+  }
+
   async findOne(id: string, userId?: string) {
     // Build where clause
     const where: any = { id };

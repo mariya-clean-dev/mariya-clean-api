@@ -16,24 +16,47 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { ResponseService } from 'src/response/response.service';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('subscriptions')
 @UseGuards(JwtAuthGuard)
 export class SubscriptionsController {
-  constructor(private readonly subscriptionsService: SubscriptionsService) {}
+  constructor(
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly responseService: ResponseService,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
   @Roles('customer')
-  create(@Body() createSubscriptionDto: CreateSubscriptionDto, @Request() req) {
-    return this.subscriptionsService.create(createSubscriptionDto, req.user.id);
+  async create(
+    @Body() createSubscriptionDto: CreateSubscriptionDto,
+    @Request() req,
+  ) {
+    const subscription = await this.subscriptionsService.create(
+      createSubscriptionDto,
+      req.user.id,
+    );
+    return this.responseService.successResponse(
+      'Subscription Created',
+      subscription,
+    );
   }
 
   @Get()
-  findAll(@Request() req) {
+  async findAll(@Request() req) {
     // Admin sees all subscriptions, other users see only their own
     const userId = req.user.role === 'admin' ? undefined : req.user.id;
-    return this.subscriptionsService.findAll(userId);
+    const list = await this.subscriptionsService.findAll(userId);
+    return this.responseService.successResponse('Subscriptions', list);
+  }
+
+  @Get('types')
+  @Public()
+  async findAllSubscriptionType() {
+    const subTypes = await this.subscriptionsService.findAllSubscriptionType();
+    return this.responseService.successResponse('Subscription Types', subTypes);
   }
 
   @Get(':id')

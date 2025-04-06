@@ -73,9 +73,9 @@ model Role {
   name      String   @unique
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-  users     User[]
+  users     User[]   
 
-  @@map("roles")
+  @@map("roles") 
 }
 
 model Region {
@@ -129,6 +129,7 @@ model Address {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   user        User     @relation(fields: [userId], references: [id])
+  bookingAddresses BookingAddress[]
 
   @@map("addresses")
 }
@@ -172,6 +173,7 @@ model Booking {
   type                 ServiceType
   serviceId            String            @map("service_id")
   subscriptionId       String?           @map("subscription_id")
+  subscriptionTypeId   String?           @map("subscription_type_id")
   assignedStaffId      String?           @map("assigned_staff_id")
   areaSize             Int               @map("area_size")
   isEco                Boolean           @map("is_eco")
@@ -184,6 +186,7 @@ model Booking {
   assignedStaff        User?             @relation("StaffAssignments", fields: [assignedStaffId], references: [id])
   service              Service           @relation(fields: [serviceId], references: [id])
   subscription         Subscription?     @relation(fields: [subscriptionId], references: [id])
+  subscriptionType SubscriptionType? @relation("SubscriptionTypeBookings", fields: [subscriptionTypeId], references: [id])
   bookingAddress       BookingAddress?
   bookingLogs          BookingLog[]
   transactions         Transaction[]
@@ -197,15 +200,12 @@ model Booking {
 
 model BookingAddress {
   id                  String   @id @default(uuid())
-  bookingId           String   @unique @map("booking_id")
-  street              String
-  city                String
-  state               String
-  zip                 String
+bookingId             String @map("booking_id") @unique
+  addressId           String   @map("address_id")
   specialInstructions String?  @db.Text @map("special_instructions")
   createdAt           DateTime @default(now()) @map("created_at")
   booking             Booking  @relation(fields: [bookingId], references: [id])
-
+  address             Address  @relation(fields: [addressId], references: [id])
   @@map("booking_addresses")
 }
 
@@ -304,6 +304,18 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model SubscriptionType {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  description        String?  @db.Text
+  recurringFrequency Int      @map("recurring_frequency")
+  available_discount Decimal  @default(0) @db.Decimal(3, 1)
+  bookings Booking[] @relation("SubscriptionTypeBookings")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("subscription_type")
+} 
 
 model StaffPerformance {
   id                    String   @id @default(uuid())

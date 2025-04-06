@@ -229,46 +229,46 @@ export class ServicesService {
 
   async getPriceEstimate(
     serviceId: string,
-    areaSize: number,
-    regionId: string,
-    addOnIds: string[] = [],
+    square_feet: number,
+    no_of_rooms: number,
+    no_of_bathrooms: number,
   ) {
-    // Check if service exists
+    // Step 1: Get service info
     const service = await this.findOne(serviceId);
+    const base_price = Number(service.base_price);
+    const price_per_sqft = Number(service.square_foot_price);
+    const price_per_room = Number(service.room_rate);
+    const price_per_bathroom = Number(service.bathroom_rate);
 
-    // Calculate base price
-    let totalPrice = Number(service.base_price);
+    // Step 2: Calculate base price (without any subscription adjustments)
+    const baseCalculatedPrice =
+      base_price +
+      ((square_feet - 1000) / 500) * price_per_sqft +
+      (no_of_rooms - 1) * price_per_room +
+      (no_of_bathrooms - 1) * price_per_bathroom;
 
-    // Add price for add-ons if specified
-    if (addOnIds.length > 0) {
-      const addOns = await this.prisma.serviceAddOn.findMany({
-        where: {
-          id: { in: addOnIds },
-          serviceId,
-        },
-      });
+    // Step 3: Get subscription types
+    const subscriptionTypes = await this.prisma.subscriptionType.findMany();
 
-      if (addOns.length !== addOnIds.length) {
-        throw new BadRequestException(
-          'One or more add-ons not found or not associated with this service',
-        );
-      }
+    // Step 4: Loop through each subscription type and calculate the adjusted price
+    const estimates = subscriptionTypes.map((sub) => {
+      // For example, assume each subscription type has a discountPercent
+      const discountPercent = Number(sub.available_discount || 0); // fallback to 0 if null
+      const planprice = baseCalculatedPrice * Number(sub.recurringFrequency);
+      const discountedPrice = planprice - (planprice * discountPercent) / 100;
 
-      const addOnTotal = addOns.reduce(
-        (total, addOn) => total + Number(addOn.price),
-        0,
-      );
-      totalPrice += addOnTotal;
-    }
+      return {
+        subscriptionTypeId: sub.id,
+        subscriptionName: sub.name,
+        description: sub.description,
+        discountPercent,
+        finalPrice: Math.max(discountedPrice, 0), // prevent negative
+      };
+    });
 
     return {
-      serviceId,
-      serviceName: service.name,
-      areaSize,
-      basePlanPrice: service.base_price,
-      currency: 'usd',
-      addOns: addOnIds.length > 0 ? addOnIds : [],
-      totalPrice,
+      baseCalculatedPrice,
+      estimates,
     };
   }
 

@@ -69,15 +69,16 @@ export class BookingsService {
         price: createBookingDto.price,
         modificationDeadline,
         subscriptionId: createBookingDto.subscriptionId,
-        bookingAddress: {
-          create: {
-            street: createBookingDto.address.street,
-            city: createBookingDto.address.city,
-            state: createBookingDto.address.state,
-            zip: createBookingDto.address.zip,
-            specialInstructions: createBookingDto.address.specialInstructions,
-          },
-        },
+        // bookingAddress: {
+        //   create: {
+        //     address: {
+        //       connect: {
+        //         id: createBookingDto.addressId,
+        //       },
+        //     },
+        //     specialInstructions: createBookingDto.address?.specialInstructions,
+        //   },
+        // },
         bookingLogs: {
           create: {
             status: BookingStatus.booked,

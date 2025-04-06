@@ -10,19 +10,23 @@ import {
 export class GetPriceEstimateDto {
   @IsString()
   @IsNotEmpty()
-  serviceId: string;
+  service_id: string;
 
   @IsNumber()
   @IsNotEmpty()
   @Min(0)
-  areaSize: number;
+  no_of_rooms: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  no_of_bathrooms: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  square_feet: number;
 
   @IsString()
-  @IsNotEmpty()
-  regionId: string;
-
-  @IsArray()
   @IsOptional()
-  addOnIds?: string[] = [];
+  subcription_type_id?: string;
 }
-

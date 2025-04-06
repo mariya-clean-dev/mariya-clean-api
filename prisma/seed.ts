@@ -126,6 +126,35 @@ async function main() {
     },
   });
 
+  const subscriptionPlans = [
+    {
+      name: 'Weekly Plan',
+      description: 'A recurring weekly subscription plan',
+      recurringFrequency: 4, // in days
+      available_discount: 10.0,
+    },
+    {
+      name: 'Bi-Weekly Plan',
+      description: 'A recurring bi-weekly subscription plan',
+      recurringFrequency: 2,
+      available_discount: 5.0,
+    },
+    {
+      name: 'Monthly Plan',
+      description: 'A recurring monthly subscription plan',
+      recurringFrequency: 1,
+      available_discount: 0,
+    },
+  ];
+
+  for (const plan of subscriptionPlans) {
+    await prisma.subscriptionType.upsert({
+      where: { name: plan.name },
+      update: {},
+      create: plan,
+    });
+  }
+
   console.log('Database seeded successfully!');
 }
 
