@@ -18,11 +18,15 @@ import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { ResponseService } from 'src/response/response.service';
 
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
 export class SchedulerController {
-  constructor(private readonly schedulerService: SchedulerService) {}
+  constructor(
+    private readonly schedulerService: SchedulerService,
+    private readonly resposneService: ResponseService,
+  ) {}
 
   @Post('schedules')
   @UseGuards(RolesGuard)
@@ -48,11 +52,18 @@ export class SchedulerController {
 
   @Get('month-schedules')
   @Public()
-  getMonthSchedules(
+  async getMonthSchedules(
     @Query('startDate') startDate?: Date,
     @Query('endDate') endDate?: Date,
   ) {
-    return this.schedulerService.findMonthSchedules(startDate, endDate);
+    const monthSchedule = await this.schedulerService.findMonthSchedules(
+      startDate,
+      endDate,
+    );
+    return this.resposneService.successResponse(
+      'Month resposne list',
+      monthSchedule,
+    );
   }
 
   @Get('schedules/:id')

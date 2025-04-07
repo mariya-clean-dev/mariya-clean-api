@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { UpdateScheduleDto } from './dto/update-scheduler.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
+import { CreateMonthScheduleDto } from './dto/create-month-schedule.dto';
 
 @Injectable()
 export class SchedulerService {
@@ -163,6 +164,16 @@ export class SchedulerService {
     return this.prisma.monthSchedule.findMany({
       where,
     });
+  }
+
+  async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
+    const created = await this.prisma.monthSchedule.createMany({
+      data: schedules,
+    });
+
+    return {
+      message: `${created.count} month schedules created successfully.`,
+    };
   }
 
   async findOne(id: string) {
