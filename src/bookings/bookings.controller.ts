@@ -10,6 +10,7 @@ import {
   Request,
   Query,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -33,6 +34,7 @@ import { UsersService } from 'src/users/users.service';
 import { StripeService } from 'src/stripe/stripe.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
+import { SchedulerService } from 'src/scheduler/scheduler.service';
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
@@ -44,6 +46,7 @@ export class BookingsController {
     private readonly stripeService: StripeService,
     private readonly paymentsService: PaymentsService,
     private readonly subscrptionService: SubscriptionsService,
+    private readonly schedulerService: SchedulerService,
   ) {}
 
   @Post()
@@ -137,15 +140,45 @@ export class BookingsController {
       transactionType,
     });
 
-    // if (booking.subscriptionType.name == 'Bi-Weekly Plan' && !createBookingDto.schedule_2) {
-    // }
-      return this.responseService.successResponse(
-        'Booking successfully saved... proceed to payment',
-        {
-          booking,
-          stripe: stripeData,
-        },
-      );
+    // Validate schedule dependencies
+    if (
+      booking.subscriptionType.name === 'Bi-Weekly Plan' &&
+      !createBookingDto.schedule_2
+    ) {
+      throw new ConflictException('Bi-Weekly Plan requires upto schedule 2');
+    }
+
+    if (
+      booking.subscriptionType.name === 'Weekly Plan' &&
+      !createBookingDto.schedule_4
+    ) {
+      throw new ConflictException('Weekly Plan requires upto schedule 4');
+    }
+    if (
+      booking.subscriptionType.name === 'Monthly Plan' &&
+      createBookingDto.schedule_2
+    ) {
+      throw new ConflictException('Multiple schedules found');
+    }
+    const scheduleKeys = [
+      'schedule_1',
+      'schedule_2',
+      'schedule_3',
+      'schedule_4',
+    ];
+
+    const monthSchedules = scheduleKeys.map((key) => ({
+      bookingId: booking.id,
+      ...createBookingDto[key],
+    }));
+    await this.schedulerService.createMonthSchedules(monthSchedules);
+    return this.responseService.successResponse(
+      'Booking successfully saved... proceed to payment',
+      {
+        booking,
+        stripe: stripeData,
+      },
+    );
   }
 
   @Get()
