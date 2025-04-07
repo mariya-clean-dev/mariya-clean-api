@@ -36,5 +36,6 @@ jobs:
             npm install
             npm run build || echo "Build script missing!"
             npx prisma migrate deploy || echo "Migration failed or not needed"
+            npm run prisma:seed
             pm2 restart maria-api
 
