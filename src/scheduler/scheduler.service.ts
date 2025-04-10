@@ -186,8 +186,8 @@ export class SchedulerService {
     const bookedTimes = bookedSlots.map(slot => slot.time); // e.g., ["09:00", "10:30"]
 
     const startHour = 9;
-    const endHour = 19;
-    const interval = 30;
+    const endHour = 18;
+    const interval = 60;
 
     const slots: { time: string; isAvailable: boolean }[] = [];
 
