@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { SchedulerService } from './scheduler.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -63,6 +64,25 @@ export class SchedulerController {
     return this.resposneService.successResponse(
       'Month resposne list',
       monthSchedule,
+    );
+  }
+
+  @Get('time-slots')
+  @Public()
+  async getTimeSlots(
+    @Query('weekOfMonth') weekOfMonth: number,
+    @Query('dayOfWeek') dayOfWeek: number,
+  ) {
+    if (!weekOfMonth || !dayOfWeek) {
+      throw new BadRequestException('params requried : weekOfMonth, dayOfWeek');
+    }
+    const time_slots = await this.schedulerService.getTimeSlots(
+      weekOfMonth,
+      dayOfWeek,
+    );
+    return this.resposneService.successResponse(
+      'Month resposne list',
+      time_slots,
     );
   }
 

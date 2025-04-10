@@ -8,6 +8,13 @@ import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { UpdateScheduleDto } from './dto/update-scheduler.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { CreateMonthScheduleDto } from './dto/create-month-schedule.dto';
+import * as dayjs from 'dayjs';
+import * as weekday from 'dayjs/plugin/weekday';
+import * as isoWeek from 'dayjs/plugin/isoWeek';
+import * as advancedFormat from 'dayjs/plugin/advancedFormat';
+dayjs.extend(weekday);
+dayjs.extend(isoWeek);
+dayjs.extend(advancedFormat);
 
 @Injectable()
 export class SchedulerService {
@@ -160,10 +167,41 @@ export class SchedulerService {
         where.startTime.lte = endDate;
       }
     }
-
     return this.prisma.monthSchedule.findMany({
       where,
     });
+  }
+
+  async getTimeSlots(weekOfMonth: number, dayOfWeek: number) {
+   const bookedSlots = await this.prisma.monthSchedule.findMany({
+      where: {
+        weekOfMonth,
+        dayOfWeek,
+      },
+      select: {
+        time: true,
+      },
+    });
+
+    const bookedTimes = bookedSlots.map(slot => slot.time); // e.g., ["09:00", "10:30"]
+
+    const startHour = 9;
+    const endHour = 19;
+    const interval = 30;
+
+    const slots: { time: string; isAvailable: boolean }[] = [];
+
+    let current = dayjs().hour(startHour).minute(0).second(0);
+
+    while (current.hour() < endHour || (current.hour() === endHour && current.minute() === 0)) {
+      const timeStr = current.format('HH:mm');
+      const isAvailable = !bookedTimes.includes(timeStr);
+
+      slots.push({ time: timeStr, isAvailable });
+      current = current.add(interval, 'minute');
+    }
+
+    return slots;
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {

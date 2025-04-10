@@ -32,6 +32,7 @@ export class BookingsService {
     const subscriptionType = await this.prisma.subscriptionType.findUnique({
       where: { id: createBookingDto.subscriptionTypeId },
     });
+
     if (!subscriptionType) {
       throw new NotFoundException(`Subscription type not found`);
     }
@@ -81,7 +82,9 @@ export class BookingsService {
         type: createBookingDto.type,
         areaSize: createBookingDto.areaSize,
         isEco: createBookingDto.isEco || false,
-        status: BookingStatus.booked,
+        materialProvided: createBookingDto.materialProvied || false,
+        propertyType: createBookingDto.propertyType,
+        status: BookingStatus.booked, 
         price: createBookingDto.price,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId

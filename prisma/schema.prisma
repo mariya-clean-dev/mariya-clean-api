@@ -179,6 +179,8 @@ model Booking {
   subscriptionTypeId String?           @map("subscription_type_id")
   assignedStaffId    String?           @map("assigned_staff_id")
   areaSize           Int               @map("area_size")
+  propertyType       String?           @map("property_type")
+  materialProvided   Boolean           @default(false) @map("material_provided")
   isEco              Boolean           @map("is_eco")
   status             BookingStatus
   price              Decimal           @db.Decimal(10, 2)

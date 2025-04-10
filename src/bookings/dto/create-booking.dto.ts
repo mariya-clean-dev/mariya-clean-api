@@ -83,6 +83,14 @@ export class CreateBookingDto {
   @IsOptional()
   isEco?: boolean = false;
 
+  @IsString()
+  @IsOptional()
+  propertyType?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  materialProvied?: boolean = false;
+
   @IsNumber()
   @IsNotEmpty()
   price: number;
