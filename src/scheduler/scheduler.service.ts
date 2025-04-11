@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
@@ -19,6 +20,9 @@ dayjs.extend(advancedFormat);
 
 @Injectable()
 export class SchedulerService {
+  private readonly logger = new Logger(SchedulerService.name);
+
+  
   constructor(private readonly prisma: PrismaService) {}
 
   async createSchedule(createScheduleDto: CreateScheduleDto) {
@@ -91,15 +95,15 @@ export class SchedulerService {
     }
 
     // Create schedule
-    return this.prisma.schedule.create({
-      data: {
-        staffId: createScheduleDto.staffId,
-        bookingId: createScheduleDto.bookingId,
-        status: ScheduleStatus.scheduled, // Default status
-        startTime,
-        endTime,
-      },
-    });
+    // return this.prisma.schedule.create({
+    //   data: {
+    //     staffId: createScheduleDto.staffId,
+    //     bookingId: createScheduleDto.bookingId,
+    //     status: ScheduleStatus.scheduled, // Default status
+    //     startTime,
+    //     endTime,
+    //   },
+    // });
   }
 
   async findAll(
@@ -784,15 +788,15 @@ export class SchedulerService {
 
         if (!availableStaff) continue;
 
-        await this.prisma.schedule.create({
-          data: {
-            bookingId: ms.bookingId,
-            staffId: availableStaff.id,
-            status: ScheduleStatus.scheduled,
-            startTime,
-            endTime,
-          },
-        });
+        // await this.prisma.schedule.create({
+        //   data: {
+        //     bookingId: ms.bookingId,
+        //     staffId: availableStaff.id,
+        //     status: ScheduleStatus.scheduled,
+        //     startTime,
+        //     endTime,
+        //   },
+        // });
       }
     }
   }
