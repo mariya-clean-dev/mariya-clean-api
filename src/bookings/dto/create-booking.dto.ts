@@ -127,18 +127,15 @@ export class CreateBookingDto {
   @ValidateIf((o) => o.schedule_1)
   @ValidateNested()
   @Type(() => BookingScheduleDto)
-  @IsOptional()
   schedule_2?: BookingScheduleDto;
 
   @ValidateIf((o) => o.schedule_2)
   @ValidateNested()
   @Type(() => BookingScheduleDto)
-  @IsOptional()
   schedule_3?: BookingScheduleDto;
 
   @ValidateIf((o) => o.schedule_3)
   @ValidateNested()
   @Type(() => BookingScheduleDto)
-  @IsOptional()
   schedule_4?: BookingScheduleDto;
 }

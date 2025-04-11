@@ -166,12 +166,26 @@ export class BookingsController {
       'schedule_2',
       'schedule_3',
       'schedule_4',
-    ];
+    ] as const;
 
-    const monthSchedules = scheduleKeys.map((key) => ({
-      bookingId: booking.id,
-      ...createBookingDto[key],
-    }));
+    const monthSchedules = scheduleKeys
+      .map((key) => {
+        const schedule = createBookingDto[key];
+        if (
+          schedule &&
+          typeof schedule.weekOfMonth === 'number' &&
+          typeof schedule.dayOfWeek === 'number' &&
+          typeof schedule.time === 'string'
+        ) {
+          return {
+            bookingId: booking.id,
+            ...schedule,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean); // remove nulls
+
     await this.schedulerService.createMonthSchedules(monthSchedules);
     return this.responseService.successResponse(
       'Booking successfully saved... proceed to payment',
