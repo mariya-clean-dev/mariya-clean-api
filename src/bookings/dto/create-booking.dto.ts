@@ -96,7 +96,7 @@ export class CreateBookingDto {
   price: number;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   subscriptionTypeId: string;
 
   @ValidateNested()

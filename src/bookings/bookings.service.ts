@@ -190,6 +190,7 @@ export class BookingsService {
               }
             : undefined,
         service: true,
+        monthSchedules: true,
         bookingAddress: true,
         schedules: true,
         bookingAddOns: {

@@ -12,6 +12,7 @@ import * as dayjs from 'dayjs';
 import * as weekday from 'dayjs/plugin/weekday';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import * as advancedFormat from 'dayjs/plugin/advancedFormat';
+import { ScheduleStatus } from '@prisma/client';
 dayjs.extend(weekday);
 dayjs.extend(isoWeek);
 dayjs.extend(advancedFormat);
@@ -94,6 +95,7 @@ export class SchedulerService {
       data: {
         staffId: createScheduleDto.staffId,
         bookingId: createScheduleDto.bookingId,
+        status: ScheduleStatus.scheduled, // Default status
         startTime,
         endTime,
       },
@@ -101,16 +103,23 @@ export class SchedulerService {
   }
 
   async findAll(
+    page: number = 1,
+    limit: number = 100,
     staffId?: string,
     bookingId?: string,
     startDate?: Date,
     endDate?: Date,
+    status?: string,
   ) {
     // Build where clause
     const where: any = {};
 
     if (staffId) {
       where.staffId = staffId;
+    }
+
+    if (status) {
+      where.status = status;
     }
 
     if (bookingId) {
@@ -127,33 +136,52 @@ export class SchedulerService {
       }
     }
 
-    return this.prisma.schedule.findMany({
-      where,
-      include: {
-        staff: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const [items, totalCount] = await this.prisma.$transaction([
+      this.prisma.schedule.findMany({
+        where,
+        include: {
+          staff: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-        },
-        booking: {
-          select: {
-            id: true,
-            status: true,
-            service: {
-              select: {
-                id: true,
-                name: true,
+          booking: {
+            select: {
+              id: true,
+              status: true,
+              service: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
         },
+        orderBy: {
+          startTime: 'asc',
+        },
+        skip,
+        take,
+      }),
+      this.prisma.schedule.count({ where }),
+    ]);
+
+    return [
+      items,
+      {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+        perPage: limit,
       },
-      orderBy: {
-        startTime: 'asc',
-      },
-    });
+    ];
   }
 
   async findMonthSchedules(startDate: Date, endDate: Date) {
@@ -173,7 +201,7 @@ export class SchedulerService {
   }
 
   async getTimeSlots(weekOfMonth: number, dayOfWeek: number) {
-   const bookedSlots = await this.prisma.monthSchedule.findMany({
+    const bookedSlots = await this.prisma.monthSchedule.findMany({
       where: {
         weekOfMonth,
         dayOfWeek,
@@ -183,7 +211,7 @@ export class SchedulerService {
       },
     });
 
-    const bookedTimes = bookedSlots.map(slot => slot.time); // e.g., ["09:00", "10:30"]
+    const bookedTimes = bookedSlots.map((slot) => slot.time); // e.g., ["09:00", "10:30"]
 
     const startHour = 9;
     const endHour = 18;
@@ -193,7 +221,10 @@ export class SchedulerService {
 
     let current = dayjs().hour(startHour).minute(0).second(0);
 
-    while (current.hour() < endHour || (current.hour() === endHour && current.minute() === 0)) {
+    while (
+      current.hour() < endHour ||
+      (current.hour() === endHour && current.minute() === 0)
+    ) {
       const timeStr = current.format('HH:mm');
       const isAvailable = !bookedTimes.includes(timeStr);
 
