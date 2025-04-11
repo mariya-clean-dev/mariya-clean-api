@@ -268,7 +268,7 @@ export class ServicesService {
 
     const onetimeEstimate = {
       subscriptionTypeId: null,
-      subscriptionName: 'One Time Cleaning',
+      subscriptionName: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
       finalPrice: baseCalculatedPrice, // prevent negative
