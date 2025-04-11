@@ -104,14 +104,13 @@ export class SchedulerService {
 
   async findAll(
     page: number = 1,
-    limit: number = 100,
+    limit: number = 10,
     staffId?: string,
     bookingId?: string,
     startDate?: Date,
     endDate?: Date,
     status?: string,
   ) {
-    // Build where clause
     const where: any = {};
 
     if (staffId) {
@@ -136,11 +135,7 @@ export class SchedulerService {
       }
     }
 
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-    const take = limit;
-
-    const [items, totalCount] = await this.prisma.$transaction([
+    const [data, total] = await this.prisma.$transaction([
       this.prisma.schedule.findMany({
         where,
         include: {
@@ -167,21 +162,21 @@ export class SchedulerService {
         orderBy: {
           startTime: 'asc',
         },
-        skip,
-        take,
+        skip: (page - 1) * limit,
+        take: limit,
       }),
       this.prisma.schedule.count({ where }),
     ]);
 
-    return [
-      items,
-      {
-        totalCount,
-        totalPages: Math.ceil(totalCount / limit),
-        currentPage: page,
-        perPage: limit,
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-    ];
+    };
   }
 
   async findMonthSchedules(startDate: Date, endDate: Date) {
@@ -718,5 +713,87 @@ export class SchedulerService {
     });
 
     return availableStaff;
+  }
+
+  async autoGenerateSchedules() {
+    const today = new Date();
+
+    for (let i = 0; i < 3; i++) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + i);
+
+      const dayOfWeek = targetDate.getDay(); // 0 (Sunday) - 6 (Saturday)
+      const dateOnly = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // Get all MonthSchedules matching the day
+      const monthSchedules = await this.prisma.monthSchedule.findMany({
+        where: {
+          dayOfWeek,
+          booking: {
+            status: 'booked',
+            type: 'subscription',
+          },
+          skip: false,
+        },
+        include: {
+          booking: {
+            include: {
+              customer: true,
+              service: true,
+            },
+          },
+        },
+      });
+
+      for (const ms of monthSchedules) {
+        const scheduleExists = await this.prisma.schedule.findFirst({
+          where: {
+            bookingId: ms.bookingId,
+            startTime: {
+              gte: new Date(`${dateOnly}T00:00:00Z`),
+              lt: new Date(`${dateOnly}T23:59:59Z`),
+            },
+          },
+        });
+
+        if (scheduleExists) continue;
+
+        const [hours, minutes] = ms.time.split(':').map(Number);
+        const startTime = new Date(dateOnly);
+        startTime.setHours(hours, minutes);
+
+        const endTime = new Date(startTime);
+        endTime.setMinutes(
+          startTime.getMinutes() + ms.booking.service.durationMinutes,
+        );
+
+        // Choose an available staff member (simplified here)
+        const availableStaff = await this.prisma.user.findFirst({
+          where: {
+            role: { name: 'staff' },
+            staffAvailability: {
+              some: {
+                dayOfWeek,
+                isAvailable: true,
+                startTime: { lte: startTime },
+                endTime: { gte: endTime },
+              },
+            },
+          },
+        });
+
+        if (!availableStaff) continue;
+
+        await this.prisma.schedule.create({
+          data: {
+            bookingId: ms.bookingId,
+            staffId: availableStaff.id,
+            status: ScheduleStatus.scheduled,
+            startTime,
+            endTime,
+          },
+        });
+      }
+    }
   }
 }

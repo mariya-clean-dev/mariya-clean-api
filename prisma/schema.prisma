@@ -271,6 +271,7 @@ model Transaction {
 model Schedule {
   id              String    @id @default(uuid())
   staffId         String    @map("staff_id")
+  serviceId       String    @map("service_id")
   bookingId       String?   @map("booking_id")
   startTime       DateTime  @map("start_time")
   endTime         DateTime  @map("end_time")
@@ -281,6 +282,7 @@ model Schedule {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
   staff           User      @relation(fields: [staffId], references: [id])
   booking         Booking?  @relation(fields: [bookingId], references: [id])
+   service     Service  @relation(fields: [serviceId], references: [id])
 
   @@map("schedules")
 }

@@ -251,7 +251,7 @@ export class ServicesService {
     const subscriptionTypes = await this.prisma.subscriptionType.findMany();
 
     // Step 4: Loop through each subscription type and calculate the adjusted price
-    const estimates = subscriptionTypes.map((sub) => {
+    let estimates = subscriptionTypes.map((sub) => {
       // For example, assume each subscription type has a discountPercent
       const discountPercent = Number(sub.available_discount || 0); // fallback to 0 if null
       const planprice = baseCalculatedPrice * Number(sub.recurringFrequency);
@@ -265,6 +265,16 @@ export class ServicesService {
         finalPrice: Math.max(discountedPrice, 0), // prevent negative
       };
     });
+
+    const onetimeEstimate = {
+      subscriptionTypeId: null,
+      subscriptionName: 'One Time Cleaning',
+      description: 'A Single time Cleaning Service',
+      discountPercent: 0,
+      finalPrice: baseCalculatedPrice, // prevent negative
+    };
+
+    estimates.push(onetimeEstimate);
 
     return {
       baseCalculatedPrice,
