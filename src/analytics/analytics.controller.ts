@@ -1,55 +1,143 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ResponseService } from 'src/response/response.service';
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(
+    private readonly analyticsService: AnalyticsService,
+    private readonly responseService: ResponseService,
+  ) {}
 
   @Get('business-overview')
-  getBusinessOverview(
+  async getBusinessOverview(
     @Query('startDate') startDate: Date,
     @Query('endDate') endDate: Date,
   ) {
-    return this.analyticsService.getBusinessOverview(startDate, endDate);
+    const overview = await this.analyticsService.getBusinessOverview(
+      startDate,
+      endDate,
+    );
+    return this.responseService.successResponse(
+      'Business Overview Report',
+      overview,
+    );
   }
 
   @Get('staff-performance')
-  getStaffPerformance(
+  async getStaffPerformance(
     @Query('staffId') staffId?: string,
     @Query('month') month?: Date,
   ) {
-    return this.analyticsService.getStaffPerformance(staffId, month);
+    const data = await this.analyticsService.getStaffPerformance(
+      staffId,
+      month,
+    );
+    return this.responseService.successResponse(
+      'Staff Performance Report',
+      data,
+    );
   }
 
   @Post('update-staff-metrics')
-  updateStaffPerformanceMetrics() {
-    return this.analyticsService.updateStaffPerformanceMetrics();
+  async updateStaffPerformanceMetrics() {
+    const response =
+      await this.analyticsService.updateStaffPerformanceMetrics();
+    return this.responseService.successResponse(
+      'Staff Performance Metrics Updated',
+      response,
+    );
   }
 
   @Get('customer-metrics')
-  getCustomerMetrics(
+  async getCustomerMetrics(
     @Query('startDate') startDate: Date,
     @Query('endDate') endDate: Date,
   ) {
-    return this.analyticsService.getCustomerMetrics(startDate, endDate);
+    const response = await this.analyticsService.getCustomerMetrics(
+      startDate,
+      endDate,
+    );
+    return this.responseService.successResponse(
+      'Customer Metrics Report',
+      response,
+    );
   }
 
   @Get('service-metrics')
-  getServiceMetrics(
+  async getServiceMetrics(
     @Query('startDate') startDate: Date,
     @Query('endDate') endDate: Date,
   ) {
-    return this.analyticsService.getServiceMetrics(startDate, endDate);
+    const response = await this.analyticsService.getServiceMetrics(
+      startDate,
+      endDate,
+    );
+    return this.responseService.successResponse(
+      'Service Metrics Report',
+      response,
+    );
   }
+
+  @Get('summary')
+  async getSummary(
+    @Query('startDate') startDate: Date,
+    @Query('endDate') endDate: Date,
+  ) {
+    const summary = await this.analyticsService.getSummary(startDate, endDate);
+    return this.responseService.successResponse(
+      'Business Summary Report',
+      summary,
+    );
+  }
+
+  @Get('performance')
+  async getPerformance(
+    @Query('startDate') startDate: Date,
+    @Query('endDate') endDate: Date,
+  ) {
+    const performance = await this.analyticsService.getPerformance(
+      startDate,
+      endDate,
+    );
+    return this.responseService.successResponse(
+      'Business Performance Report',
+      performance,
+    );
+  }
+
+  @Get('bookings-over-time')
+  async getBookingGraph(
+    @Query('startDate') startDate: Date,
+    @Query('endDate') endDate: Date,
+  ) {
+    const trend = await this.analyticsService.getBookingTrend(
+      startDate,
+      endDate,
+    );
+    return this.responseService.successResponse(
+      'Bookings Over Time Report',
+      trend,
+    );
+  }
+
+  // @Get('cancellations')
+  // async getCancellations(
+  //   @Query('startDate') startDate: Date,
+  //   @Query('endDate') endDate: Date,
+  // ) {
+  //   const cancellations = await this.analyticsService.getCancellations(
+  //     startDate,
+  //     endDate,
+  //   );
+  //   return this.responseService.successResponse(
+  //     'Cancellation Report',
+  //     cancellations,
+  //   );
+  // }
 }

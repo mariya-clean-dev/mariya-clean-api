@@ -87,9 +87,9 @@ export class CreateBookingDto {
   @IsOptional()
   propertyType?: string;
 
-  @IsBoolean()
   @IsOptional()
-  materialProvied?: boolean = false;
+  @IsBoolean()
+  materialProvided?: boolean;
 
   @IsNumber()
   @IsNotEmpty()
