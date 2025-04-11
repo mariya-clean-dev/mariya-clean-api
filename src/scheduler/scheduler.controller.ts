@@ -9,6 +9,7 @@ import {
   UseGuards,
   Query,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { SchedulerService } from './scheduler.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -32,22 +33,43 @@ export class SchedulerController {
   @Post('schedules')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  createSchedule(@Body() createScheduleDto: CreateScheduleDto) {
-    return this.schedulerService.createSchedule(createScheduleDto);
+  async createSchedule(@Body() createScheduleDto: CreateScheduleDto) {
+    const schedule =
+      await this.schedulerService.createSchedule(createScheduleDto);
+    return this.resposneService.successResponse(
+      'Schedule created successfully',
+      schedule,
+    );
   }
 
   @Get('schedules')
-  getSchedules(
+  @Roles('admin', 'staff')
+  async getSchedules(
+    @Request() req: any,
     @Query('staffId') staffId?: string,
     @Query('bookingId') bookingId?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
     @Query('startDate') startDate?: Date,
     @Query('endDate') endDate?: Date,
   ) {
-    return this.schedulerService.findAll(
+    const user = req.user;
+    if (user.role == 'staff') {
+      staffId = user.id;
+    }
+    const schedules = await this.schedulerService.findAll(
+      page,
+      limit,
       staffId,
       bookingId,
       startDate,
       endDate,
+      status,
+    );
+    return this.resposneService.successResponse(
+      'Schedules retrieved successfully',
+      schedules,
     );
   }
 
@@ -62,7 +84,7 @@ export class SchedulerController {
       endDate,
     );
     return this.resposneService.successResponse(
-      'Month resposne list',
+      'Month schedule list',
       monthSchedule,
     );
   }
@@ -73,80 +95,112 @@ export class SchedulerController {
     @Query('weekOfMonth') weekOfMonth: number,
     @Query('dayOfWeek') dayOfWeek: number,
   ) {
-    if (!weekOfMonth || !dayOfWeek) {
-      throw new BadRequestException('params requried : weekOfMonth, dayOfWeek');
+    if (!weekOfMonth) {
+      throw new BadRequestException('params required: weekOfMonth, dayOfWeek');
     }
-    const time_slots = await this.schedulerService.getTimeSlots(
+    const timeSlots = await this.schedulerService.getTimeSlots(
       weekOfMonth,
       dayOfWeek,
     );
-    return this.resposneService.successResponse(
-      'Month resposne list',
-      time_slots,
-    );
+    return this.resposneService.successResponse('Time slots list', timeSlots);
   }
 
   @Get('schedules/:id')
-  getSchedule(@Param('id') id: string) {
-    return this.schedulerService.findOne(id);
+  async getSchedule(@Param('id') id: string) {
+    const schedule = await this.schedulerService.findOne(id);
+    return this.resposneService.successResponse(
+      'Schedule retrieved successfully',
+      schedule,
+    );
   }
 
   @Patch('schedules/:id')
   @UseGuards(RolesGuard)
   @Roles('admin', 'staff')
-  updateSchedule(
+  async updateSchedule(
     @Param('id') id: string,
     @Body() updateScheduleDto: UpdateScheduleDto,
   ) {
-    return this.schedulerService.update(id, updateScheduleDto);
+    const updated = await this.schedulerService.update(id, updateScheduleDto);
+    return this.resposneService.successResponse(
+      'Schedule updated successfully',
+      updated,
+    );
   }
 
   @Delete('schedules/:id')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  removeSchedule(@Param('id') id: string) {
-    return this.schedulerService.remove(id);
+  async removeSchedule(@Param('id') id: string) {
+    const removed = await this.schedulerService.remove(id);
+    return this.resposneService.successResponse(
+      'Schedule removed successfully',
+      removed,
+    );
   }
 
   @Get('staff/:staffId/availability')
-  getStaffAvailability(@Param('staffId') staffId: string) {
-    return this.schedulerService.getStaffAvailability(staffId);
+  async getStaffAvailability(@Param('staffId') staffId: string) {
+    const availability =
+      await this.schedulerService.getStaffAvailability(staffId);
+    return this.resposneService.successResponse(
+      'Staff availability retrieved',
+      availability,
+    );
   }
 
   @Post('staff/availability')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  createStaffAvailability(
+  async createStaffAvailability(
     @Body() createAvailabilityDto: CreateAvailabilityDto,
   ) {
-    return this.schedulerService.createStaffAvailability(createAvailabilityDto);
+    const created = await this.schedulerService.createStaffAvailability(
+      createAvailabilityDto,
+    );
+    return this.resposneService.successResponse(
+      'Staff availability created',
+      created,
+    );
   }
 
   @Patch('staff/availability/:id')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  updateStaffAvailability(
+  async updateStaffAvailability(
     @Param('id') id: string,
     @Body() updateAvailabilityDto: UpdateAvailabilityDto,
   ) {
-    return this.schedulerService.updateStaffAvailability(
+    const updated = await this.schedulerService.updateStaffAvailability(
       id,
       updateAvailabilityDto,
+    );
+    return this.resposneService.successResponse(
+      'Staff availability updated',
+      updated,
     );
   }
 
   @Delete('staff/availability/:id')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  removeStaffAvailability(@Param('id') id: string) {
-    return this.schedulerService.removeStaffAvailability(id);
+  async removeStaffAvailability(@Param('id') id: string) {
+    const removed = await this.schedulerService.removeStaffAvailability(id);
+    return this.resposneService.successResponse(
+      'Staff availability removed',
+      removed,
+    );
   }
 
   @Get('available-staff')
-  getAvailableStaff(
+  async getAvailableStaff(
     @Query('date') date: Date,
     @Query('serviceId') serviceId: string,
   ) {
-    return this.schedulerService.getAvailableStaff(date, serviceId);
+    const staff = await this.schedulerService.getAvailableStaff(
+      date,
+      serviceId,
+    );
+    return this.resposneService.successResponse('Available staff list', staff);
   }
 }

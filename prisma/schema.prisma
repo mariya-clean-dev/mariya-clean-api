@@ -23,6 +23,14 @@ enum ServiceType {
   subscription
 }
 
+enum ScheduleStatus {
+  scheduled
+  in_progress
+  completed
+  missed
+  canceled
+}
+
 enum BookingStatus {
   booked
   pending
@@ -190,7 +198,7 @@ model Booking {
   assignedStaff      User?             @relation("StaffAssignments", fields: [assignedStaffId], references: [id])
   service            Service           @relation(fields: [serviceId], references: [id])
   subscription       Subscription?     @relation(fields: [subscriptionId], references: [id])
-  subscriptionType   SubscriptionType? @relation("SubscriptionTypeBookings", fields: [subscriptionTypeId], references: [id])
+  subscriptionType   SubscriptionType? @relation(fields: [subscriptionTypeId], references: [id])
   bookingAddress     BookingAddress?
   bookingLogs        BookingLog[]
   transactions       Transaction[]
@@ -209,6 +217,7 @@ model MonthSchedule {
   weekOfMonth Int      @map("week_of_month")
   dayOfWeek   Int      @map("day_of_week") // 0 (Sunday) - 6 (Saturday)
   time        String   @map("time")
+  skip        Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -267,6 +276,7 @@ model Schedule {
   endTime         DateTime  @map("end_time")
   actualStartTime DateTime? @map("actual_start_time")
   actualEndTime   DateTime? @map("actual_end_time")
+  status          ScheduleStatus
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
   staff           User      @relation(fields: [staffId], references: [id])
@@ -330,7 +340,7 @@ model SubscriptionType {
   description        String?   @db.Text
   recurringFrequency Int       @map("recurring_frequency")
   available_discount Decimal   @default(0) @db.Decimal(3, 1)
-  bookings           Booking[] @relation("SubscriptionTypeBookings")
+  bookings           Booking[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
