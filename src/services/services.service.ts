@@ -267,7 +267,7 @@ export class ServicesService {
     });
 
     const onetimeEstimate = {
-      subscriptionTypeId: null,
+      subscriptionTypeId: "notASubcriptionTypeId",
       subscriptionName: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
