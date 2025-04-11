@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import {
+  Booking,
   BookingStatus,
   Prisma,
   RecurringType,
@@ -182,13 +183,37 @@ export class BookingsController {
   }
 
   @Get()
-  async findAll(@Request() req, @Query('status') status?: BookingStatus) {
-    return this.bookingsService.findAll(req.user.role, req.user.id);
+  async findAll(
+    @Request() req,
+    @Query('status') status?: BookingStatus,
+    @Query('type') type?: ServiceType,
+  ) {
+    const param: Partial<Booking> = {};
+
+    if (status) {
+      param.status = status;
+    }
+
+    if (type) {
+      param.type = type;
+    }
+
+    const bookings = await this.bookingsService.findAll(
+      req.user.role,
+      req.user.id,
+      param,
+    );
+    return this.responseService.successResponse('Bookings list', bookings);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req) {
-    return this.bookingsService.findOne(id, req.user.id, req.user.role);
+    const booking = await this.bookingsService.findOne(
+      id,
+      req.user.id,
+      req.user.role,
+    );
+    return this.responseService.successResponse('Booking details', booking);
   }
 
   @Patch(':id')

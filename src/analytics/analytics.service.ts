@@ -1,6 +1,12 @@
 // src/analytics/analytics.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookingStatus, Prisma, PrismaClient } from '@prisma/client';
+import { startOfDay, endOfDay } from 'date-fns';
 
 @Injectable()
 export class AnalyticsService {
@@ -448,5 +454,152 @@ export class AnalyticsService {
     return {
       serviceMetrics,
     };
+  }
+
+  async getSummary(startDate: Date, endDate: Date) {
+    const fromDate = new Date(startDate);
+    const toDate = new Date(endDate);
+
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      throw new BadRequestException('Invalid "startDate" or "endDate"');
+    }
+
+    const [totalClients, totalEarningsData, totalStaff] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          role: {
+            is: {
+              name: 'CLIENT',
+            },
+          },
+        },
+      }),
+      this.prisma.booking.aggregate({
+        where: {
+          status: BookingStatus.booked,
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+        _sum: { price: true },
+      }),
+      this.prisma.user.count({
+        where: {
+          role: {
+            is: {
+              name: 'STAFF',
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      totalClients,
+      totalEarnings: totalEarningsData._sum.price?.toNumber() || 0,
+      totalStaff,
+    };
+  }
+
+  async getPerformance(startDate: Date, endDate: Date) {
+    const fromDate = new Date(startDate);
+    const toDate = new Date(endDate);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        createdAt: { gte: fromDate, lte: toDate },
+      },
+      // Adjust this include if you actually have a staff relation or use user info instead
+      include: {
+        assignedStaff: true, // Replace with actual relation name if exists
+      },
+    });
+
+    const totalDays = Math.max(
+      1,
+      Math.ceil(
+        (endOfDay(toDate).getTime() - startOfDay(fromDate).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    );
+
+    const avgBookingPerDay = bookings.length / totalDays;
+    const avgStaffPerBooking =
+      bookings.reduce((acc, b) => acc + (b.assignedStaff ? 1 : 0), 0) /
+        bookings.length || 0;
+
+    const canceledBookings = bookings.filter(
+      (b) => b.status === 'canceled',
+    ).length;
+
+    return {
+      avgBookingPerDay: Math.round(avgBookingPerDay),
+      avgStaffPerBooking: Math.round(avgStaffPerBooking),
+      canceledBookings,
+    };
+  }
+
+  async getBookingTrend(startDate: Date, endDate: Date) {
+    const fromDate = new Date(startDate);
+    const toDate = new Date(endDate);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        createdAt: { gte: fromDate, lte: toDate },
+      },
+      select: {
+        createdAt: true,
+      },
+    });
+
+    const monthlyCount = new Map<string, number>();
+
+    for (const booking of bookings) {
+      const date = new Date(booking.createdAt);
+      const label = date.toLocaleString('default', { month: 'short' }); // "Jan", "Feb", etc.
+
+      monthlyCount.set(label, (monthlyCount.get(label) || 0) + 1);
+    }
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return months.map((month) => ({
+      month,
+      value: monthlyCount.get(month) || 0,
+    }));
+  }
+
+  async getCancellations(startDate: Date, endDate: Date) {
+    // const fromDate = new Date(from);
+    // const toDate = new Date(to);
+    // const canceled = await this.prisma.booking.findMany({
+    //   where: {
+    //     status: 'canceled',
+    //     createdAt: { gte: fromDate, lte: toDate },
+    //   },
+    //   include: {
+    //     user: true,
+    //     bookingAddress: true,
+    //     location: true,
+    //   },
+    // });
+    // return canceled.map((c) => ({
+    //   customerName: c.user?.name || 'Unknown',
+    //   date: c.scheduleDate?.toISOString().split('T')[0] || '',
+    //   timeSlot: `${c.timeFrom || ''} - ${c.timeTo || ''}`,
+    //   location: `${c.location?.city || ''}, ${c.location?.state || ''}, ${c.location?.zip || ''} - ${c.location?.area || ''}`,
+    //   status: 'Canceled',
+    // }));
   }
 }

@@ -82,9 +82,9 @@ export class BookingsService {
         type: createBookingDto.type,
         areaSize: createBookingDto.areaSize,
         isEco: createBookingDto.isEco || false,
-        materialProvided: createBookingDto.materialProvied || false,
+        materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
-        status: BookingStatus.booked, 
+        status: BookingStatus.booked,
         price: createBookingDto.price,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
@@ -156,8 +156,8 @@ export class BookingsService {
     return booking;
   }
 
-  async findAll(role: string, userId: string) {
-    let where = {};
+  async findAll(role: string, userId: string, param: any) {
+    let where = param;
 
     // Filter bookings based on user role
     if (role === 'customer') {
