@@ -6,6 +6,10 @@ export class CreateScheduleDto {
   staffId: string;
 
   @IsString()
+  @IsNotEmpty()
+  serviceId: string;
+
+  @IsString()
   @IsOptional()
   bookingId?: string;
 

@@ -42,6 +42,20 @@ export class SchedulerController {
     );
   }
 
+  @Get('available-staff')
+  async getAvailableStaffs(
+    @Query('start') start: string,
+    @Query('end') end: string,
+  ) {
+    const startTime = new Date(start);
+    const endTime = new Date(end);
+    const data = await this.schedulerService.getAvailableStaffs(
+      startTime,
+      endTime,
+    );
+    return this.resposneService.successResponse('Available staffs', data);
+  }
+
   @Get('schedules')
   @Roles('admin', 'staff')
   async getSchedules(
@@ -138,71 +152,4 @@ export class SchedulerController {
       removed,
     );
   }
-
-  @Get('staff/:staffId/availability')
-  async getStaffAvailability(@Param('staffId') staffId: string) {
-    const availability =
-      await this.schedulerService.getStaffAvailability(staffId);
-    return this.resposneService.successResponse(
-      'Staff availability retrieved',
-      availability,
-    );
-  }
-
-  @Post('staff/availability')
-  @UseGuards(RolesGuard)
-  @Roles('admin')
-  async createStaffAvailability(
-    @Body() createAvailabilityDto: CreateAvailabilityDto,
-  ) {
-    const created = await this.schedulerService.createStaffAvailability(
-      createAvailabilityDto,
-    );
-    return this.resposneService.successResponse(
-      'Staff availability created',
-      created,
-    );
-  }
-
-  @Patch('staff/availability/:id')
-  @UseGuards(RolesGuard)
-  @Roles('admin')
-  async updateStaffAvailability(
-    @Param('id') id: string,
-    @Body() updateAvailabilityDto: UpdateAvailabilityDto,
-  ) {
-    const updated = await this.schedulerService.updateStaffAvailability(
-      id,
-      updateAvailabilityDto,
-    );
-    return this.resposneService.successResponse(
-      'Staff availability updated',
-      updated,
-    );
-  }
-
-  @Delete('staff/availability/:id')
-  @UseGuards(RolesGuard)
-  @Roles('admin')
-  async removeStaffAvailability(@Param('id') id: string) {
-    const removed = await this.schedulerService.removeStaffAvailability(id);
-    return this.resposneService.successResponse(
-      'Staff availability removed',
-      removed,
-    );
-  }
-
-  @Get('available-staff')
-  async getAvailableStaff(
-    @Query('date') date: Date,
-    @Query('serviceId') serviceId: string,
-  ) {
-    const staff = await this.schedulerService.getAvailableStaff(
-      date,
-      serviceId,
-    );
-    return this.resposneService.successResponse('Available staff list', staff);
-  }
 }
-
-

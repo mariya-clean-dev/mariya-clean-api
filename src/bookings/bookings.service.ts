@@ -28,13 +28,15 @@ export class BookingsService {
         `Service with ID ${createBookingDto.serviceId} not found`,
       );
     }
+    let subscriptionType;
+    if (createBookingDto.subscriptionTypeId) {
+      subscriptionType = await this.prisma.subscriptionType.findUnique({
+        where: { id: createBookingDto.subscriptionTypeId },
+      });
 
-    const subscriptionType = await this.prisma.subscriptionType.findUnique({
-      where: { id: createBookingDto.subscriptionTypeId },
-    });
-
-    if (!subscriptionType) {
-      throw new NotFoundException(`Subscription type not found`);
+      if (!subscriptionType) {
+        throw new NotFoundException(`Subscription type not found`);
+      }
     }
 
     // If subscription is provided, check if it exists and belongs to user
@@ -89,7 +91,7 @@ export class BookingsService {
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
           : null,
-        subscriptionTypeId: subscriptionType.id,
+        subscriptionTypeId: subscriptionType ? subscriptionType.id : null,
         bookingAddress: {
           create: {
             address: {
