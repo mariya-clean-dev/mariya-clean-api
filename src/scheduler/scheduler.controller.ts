@@ -21,6 +21,7 @@ import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { ResponseService } from 'src/response/response.service';
+import { RescheduleDto } from './dto/reschedule.dto';
 
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
@@ -139,6 +140,17 @@ export class SchedulerController {
     return this.resposneService.successResponse(
       'Schedule updated successfully',
       updated,
+    );
+  }
+
+  @Patch('reschedule/:id')
+  async reschedule(
+    @Param('id') scheduleId: string,
+    @Body() rescheduleDto: RescheduleDto,
+  ) {
+    return this.schedulerService.rescheduleAndAssignStaff(
+      scheduleId,
+      rescheduleDto,
     );
   }
 

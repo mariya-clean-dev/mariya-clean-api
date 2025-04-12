@@ -10,6 +10,49 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 
+function getNextDateFromWeekdayAndWeek(
+  weekOfMonth: number,
+  dayOfWeek: number,
+): Date | null {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-11
+
+  // Try current month first
+  let candidate = getDateInMonth(
+    currentYear,
+    currentMonth,
+    weekOfMonth,
+    dayOfWeek,
+  );
+
+  if (!candidate || candidate < today) {
+    candidate = getDateInMonth(
+      currentYear,
+      currentMonth + 1,
+      weekOfMonth,
+      dayOfWeek,
+    );
+  }
+
+  return candidate;
+}
+
+function getDateInMonth(
+  year: number,
+  month: number,
+  weekOfMonth: number,
+  dayOfWeek: number,
+): Date | null {
+  const firstDayOfMonth = new Date(year, month, 1);
+  const dayOfFirst = firstDayOfMonth.getDay();
+  const offset = (dayOfWeek - dayOfFirst + 7) % 7;
+  const day = 1 + offset + (weekOfMonth - 1) * 7;
+
+  const result = new Date(year, month, day);
+  return result.getMonth() === month ? result : null;
+}
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -169,7 +212,7 @@ export class BookingsService {
     }
     // Admin sees all bookings (no filter)
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where,
       include: {
         customer: {
@@ -194,6 +237,7 @@ export class BookingsService {
         service: true,
         monthSchedules: true,
         bookingAddress: true,
+        subscriptionType: true,
         schedules: true,
         bookingAddOns: {
           include: {
@@ -205,6 +249,32 @@ export class BookingsService {
         createdAt: 'desc',
       },
     });
+
+    const enhancedBookings = bookings.map((booking) => {
+      let nextMonthSchedule: any = null;
+      let earliestDate: Date | null = null;
+
+      for (const ms of booking.monthSchedules) {
+        const nextDate = getNextDateFromWeekdayAndWeek(
+          ms.weekOfMonth,
+          ms.dayOfWeek,
+        );
+        if (nextDate && (!earliestDate || nextDate < earliestDate)) {
+          earliestDate = nextDate;
+          nextMonthSchedule = {
+            ...ms,
+            nextDate,
+          };
+        }
+      }
+
+      return {
+        ...booking,
+        nextMonthSchedule, // Will be null if no valid monthSchedules exist
+      };
+    });
+
+    return enhancedBookings;
   }
 
   async findOne(id: string, userId: string, role: string) {

@@ -15,6 +15,8 @@ import * as isoWeek from 'dayjs/plugin/isoWeek';
 import * as advancedFormat from 'dayjs/plugin/advancedFormat';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ScheduleStatus, User } from '@prisma/client';
+import { RescheduleDto } from './dto/reschedule.dto';
+import { Booking } from 'src/bookings/entities/booking.entity';
 dayjs.extend(weekday);
 dayjs.extend(isoWeek);
 dayjs.extend(advancedFormat);
@@ -139,6 +141,71 @@ export class SchedulerService {
     }
 
     return available;
+  }
+
+  async findAvailableStaff(date: Date) {
+    const allStaff = await this.prisma.user.findMany({
+      where: { role: { name: 'staff' } },
+    });
+
+    for (const staff of allStaff) {
+      const hasConflict = await this.prisma.schedule.findFirst({
+        where: {
+          staffId: staff.id,
+          startTime: {
+            lte: date,
+          },
+          endTime: {
+            gte: date,
+          },
+        },
+      });
+
+      if (!hasConflict) return staff; // Return first available
+    }
+
+    return null;
+  }
+
+  async rescheduleAndAssignStaff(monthScheduleId: string, dto: RescheduleDto) {
+    const { newScheduleDate } = dto;
+
+    // Ensure date is at least 3 days ahead
+    const now = new Date();
+    const daysDiff =
+      (newScheduleDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysDiff < 3)
+      throw new Error('Schedule date must be at least 3 days ahead.');
+
+    // Mark month schedule as skipped
+    const monthSchedule = await this.prisma.monthSchedule.update({
+      where: { id: monthScheduleId },
+      data: { skip: true },
+    });
+
+    // Find available staff
+    const availableStaff = await this.findAvailableStaff(newScheduleDate);
+    if (!availableStaff) throw new Error('No available staff found.');
+
+    // Create new schedule
+    const endTime = new Date(newScheduleDate.getTime() + 60 * 60 * 1000); // assume 1hr
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: monthSchedule.bookingId },
+      include: { service: true },
+    });
+    const schedule = await this.prisma.schedule.create({
+      data: {
+        staff: { connect: { id: availableStaff.id } },
+        booking: { connect: { id: monthSchedule.bookingId } },
+        service: { connect: { id: booking.service.id } }, // ✅ FIXED HERE
+        startTime: newScheduleDate,
+        endTime,
+        status: 'scheduled',
+      },
+    });
+
+    return { message: 'Staff assigned and rescheduled successfully', schedule };
   }
 
   async findAll(
@@ -496,7 +563,7 @@ export class SchedulerService {
 
       if (existingSchedule) continue;
 
-      const availableStaff = await this.findAvailableStaff(startTime, endTime);
+      const availableStaff = await this.findAvailableStaff(startTime);
       if (!availableStaff) {
         this.logger.warn(
           `No available staff for bookingId ${ms.bookingId} on ${date.toDateString()}`,
@@ -521,32 +588,32 @@ export class SchedulerService {
     }
   }
 
-  private async findAvailableStaff(
-    start: Date,
-    end: Date,
-  ): Promise<User | null> {
-    const staffList = await this.prisma.user.findMany({
-      where: {
-        role: {
-          name: 'staff', // ✅ FIXED: Assuming roles are related via `role`
-        },
-      },
-    });
+  // private async findAvailableStaff(
+  //   start: Date,
+  //   end: Date,
+  // ): Promise<User | null> {
+  //   const staffList = await this.prisma.user.findMany({
+  //     where: {
+  //       role: {
+  //         name: 'staff', // ✅ FIXED: Assuming roles are related via `role`
+  //       },
+  //     },
+  //   });
 
-    for (const staff of staffList) {
-      const hasConflict = await this.prisma.schedule.findFirst({
-        where: {
-          staffId: staff.id,
-          startTime: { lt: end },
-          endTime: { gt: start },
-        },
-      });
+  //   for (const staff of staffList) {
+  //     const hasConflict = await this.prisma.schedule.findFirst({
+  //       where: {
+  //         staffId: staff.id,
+  //         startTime: { lt: end },
+  //         endTime: { gt: start },
+  //       },
+  //     });
 
-      if (!hasConflict) return staff;
-    }
+  //     if (!hasConflict) return staff;
+  //   }
 
-    return null;
-  }
+  //   return null;
+  // }
 
   private mergeDateTime(date: Date, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
