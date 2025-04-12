@@ -128,7 +128,6 @@ export class BookingsController {
 
       transactionType = 'subscription';
     }
-
     // Save transaction
     await this.paymentsService.saveTransaction({
       bookingId: booking.id,
@@ -140,25 +139,28 @@ export class BookingsController {
       paymentMethod: 'stripe',
       transactionType,
     });
-
     // Validate schedule dependencies
-    if (
-      booking.subscriptionType.name === 'Bi-Weekly Plan' &&
-      !createBookingDto.schedule_2
-    ) {
-      throw new ConflictException('Bi-Weekly Plan requires upto schedule 2');
-    }
+    if (booking.subscriptionType) {
+      if (
+        booking.subscriptionType.name === 'Bi-Weekly Plan' &&
+        !createBookingDto.schedule_2
+      ) {
+        throw new ConflictException('Bi-Weekly Plan requires upto schedule 2');
+      }
 
-    if (
-      booking.subscriptionType.name === 'Weekly Plan' &&
-      !createBookingDto.schedule_4
-    ) {
-      throw new ConflictException('Weekly Plan requires upto schedule 4');
-    }
-    if (
-      booking.subscriptionType.name === 'Monthly Plan' &&
-      createBookingDto.schedule_2
-    ) {
+      if (
+        booking.subscriptionType.name === 'Weekly Plan' &&
+        !createBookingDto.schedule_4
+      ) {
+        throw new ConflictException('Weekly Plan requires upto schedule 4');
+      }
+      if (
+        booking.subscriptionType.name === 'Monthly Plan' &&
+        createBookingDto.schedule_2
+      ) {
+        throw new ConflictException('Multiple schedules found');
+      }
+    } else if (createBookingDto.schedule_2) {
       throw new ConflictException('Multiple schedules found');
     }
     const scheduleKeys = [

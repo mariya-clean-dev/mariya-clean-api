@@ -13,7 +13,8 @@ import * as dayjs from 'dayjs';
 import * as weekday from 'dayjs/plugin/weekday';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import * as advancedFormat from 'dayjs/plugin/advancedFormat';
-import { ScheduleStatus } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { ScheduleStatus, User } from '@prisma/client';
 dayjs.extend(weekday);
 dayjs.extend(isoWeek);
 dayjs.extend(advancedFormat);
@@ -22,7 +23,6 @@ dayjs.extend(advancedFormat);
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
 
-  
   constructor(private readonly prisma: PrismaService) {}
 
   async createSchedule(createScheduleDto: CreateScheduleDto) {
@@ -95,15 +95,50 @@ export class SchedulerService {
     }
 
     // Create schedule
-    // return this.prisma.schedule.create({
-    //   data: {
-    //     staffId: createScheduleDto.staffId,
-    //     bookingId: createScheduleDto.bookingId,
-    //     status: ScheduleStatus.scheduled, // Default status
-    //     startTime,
-    //     endTime,
-    //   },
-    // });
+    return this.prisma.schedule.create({
+      data: {
+        staff: {
+          connect: { id: createScheduleDto.staffId },
+        },
+        booking: {
+          connect: { id: createScheduleDto.bookingId },
+        },
+        service: {
+          connect: { id: createScheduleDto.serviceId },
+        },
+        status: ScheduleStatus.scheduled,
+        startTime,
+        endTime,
+      },
+    });
+  }
+
+  async getAvailableStaffs(start: Date, end: Date): Promise<User[]> {
+    const staffList = await this.prisma.user.findMany({
+      where: {
+        role: {
+          name: 'staff',
+        },
+      },
+    });
+
+    const available: User[] = [];
+
+    for (const staff of staffList) {
+      const hasConflict = await this.prisma.schedule.findFirst({
+        where: {
+          staffId: staff.id,
+          startTime: { lt: end },
+          endTime: { gt: start },
+        },
+      });
+
+      if (!hasConflict) {
+        available.push(staff);
+      }
+    }
+
+    return available;
   }
 
   async findAll(
@@ -410,394 +445,120 @@ export class SchedulerService {
     return { message: 'Schedule deleted successfully' };
   }
 
-  async getStaffAvailability(staffId: string) {
-    // Check if staff exists
-    const staff = await this.prisma.user.findFirst({
-      where: {
-        id: staffId,
-        role: {
-          name: 'staff',
-        },
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException(`Staff with ID ${staffId} not found`);
-    }
-
-    // Get staff availability
-    return this.prisma.staffAvailability.findMany({
-      where: { staffId },
-      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-    });
-  }
-
-  async createStaffAvailability(createAvailabilityDto: CreateAvailabilityDto) {
-    // Check if staff exists
-    const staff = await this.prisma.user.findFirst({
-      where: {
-        id: createAvailabilityDto.staffId,
-        role: {
-          name: 'staff',
-        },
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException(
-        `Staff with ID ${createAvailabilityDto.staffId} not found`,
-      );
-    }
-
-    // Validate day of week (0-6, Sunday to Saturday)
-    if (
-      createAvailabilityDto.dayOfWeek < 0 ||
-      createAvailabilityDto.dayOfWeek > 6
-    ) {
-      throw new BadRequestException(
-        'Day of week must be between 0 (Sunday) and 6 (Saturday)',
-      );
-    }
-
-    // Parse times
-    const startTime = new Date(
-      `1970-01-01T${createAvailabilityDto.startTime}:00Z`,
-    );
-    const endTime = new Date(`1970-01-01T${createAvailabilityDto.endTime}:00Z`);
-
-    // Validate time range
-    if (endTime <= startTime) {
-      throw new BadRequestException('End time must be after start time');
-    }
-
-    // Check for overlapping availability slots
-    const overlappingSlot = await this.prisma.staffAvailability.findFirst({
-      where: {
-        staffId: createAvailabilityDto.staffId,
-        dayOfWeek: createAvailabilityDto.dayOfWeek,
-        OR: [
-          // New slot starts during existing slot
-          {
-            startTime: { lte: startTime },
-            endTime: { gt: startTime },
-          },
-          // New slot ends during existing slot
-          {
-            startTime: { lt: endTime },
-            endTime: { gte: endTime },
-          },
-          // New slot entirely contains existing slot
-          {
-            startTime: { gte: startTime },
-            endTime: { lte: endTime },
-          },
-        ],
-      },
-    });
-
-    if (overlappingSlot) {
-      throw new BadRequestException(
-        'Availability slot overlaps with an existing slot',
-      );
-    }
-
-    // Create availability slot
-    return this.prisma.staffAvailability.create({
-      data: {
-        staffId: createAvailabilityDto.staffId,
-        dayOfWeek: createAvailabilityDto.dayOfWeek,
-        startTime,
-        endTime,
-        isAvailable: createAvailabilityDto.isAvailable ?? true,
-      },
-    });
-  }
-
-  async updateStaffAvailability(id: string, updateAvailabilityDto: any) {
-    // Check if availability slot exists
-    const availabilitySlot = await this.prisma.staffAvailability.findUnique({
-      where: { id },
-    });
-
-    if (!availabilitySlot) {
-      throw new NotFoundException(`Availability slot with ID ${id} not found`);
-    }
-
-    // Prepare update data
-    const updateData: any = {};
-
-    // Handle day of week update
-    if (updateAvailabilityDto.dayOfWeek !== undefined) {
-      // Validate day of week
-      if (
-        updateAvailabilityDto.dayOfWeek < 0 ||
-        updateAvailabilityDto.dayOfWeek > 6
-      ) {
-        throw new BadRequestException(
-          'Day of week must be between 0 (Sunday) and 6 (Saturday)',
-        );
-      }
-      updateData.dayOfWeek = updateAvailabilityDto.dayOfWeek;
-    }
-
-    // Handle start time update
-    if (updateAvailabilityDto.startTime) {
-      updateData.startTime = new Date(
-        `1970-01-01T${updateAvailabilityDto.startTime}:00Z`,
-      );
-    }
-
-    // Handle end time update
-    if (updateAvailabilityDto.endTime) {
-      updateData.endTime = new Date(
-        `1970-01-01T${updateAvailabilityDto.endTime}:00Z`,
-      );
-    }
-
-    // Handle is available update
-    if (updateAvailabilityDto.isAvailable !== undefined) {
-      updateData.isAvailable = updateAvailabilityDto.isAvailable;
-    }
-
-    // Validate time range if both times are provided
-    if (updateData.startTime && updateData.endTime) {
-      if (updateData.endTime <= updateData.startTime) {
-        throw new BadRequestException('End time must be after start time');
-      }
-    } else if (updateData.startTime) {
-      // If only start time is provided, validate with existing end time
-      if (updateData.startTime >= availabilitySlot.endTime) {
-        throw new BadRequestException('Start time must be before end time');
-      }
-    } else if (updateData.endTime) {
-      // If only end time is provided, validate with existing start time
-      if (availabilitySlot.startTime >= updateData.endTime) {
-        throw new BadRequestException('End time must be after start time');
-      }
-    }
-
-    // Check for overlapping availability slots if time or day changes
-    if (
-      updateData.dayOfWeek !== undefined ||
-      updateData.startTime ||
-      updateData.endTime
-    ) {
-      const dayOfWeek = updateData.dayOfWeek ?? availabilitySlot.dayOfWeek;
-      const startTime = updateData.startTime || availabilitySlot.startTime;
-      const endTime = updateData.endTime || availabilitySlot.endTime;
-
-      const overlappingSlot = await this.prisma.staffAvailability.findFirst({
-        where: {
-          id: { not: id }, // Exclude current slot
-          staffId: availabilitySlot.staffId,
-          dayOfWeek,
-          OR: [
-            // Updated slot starts during existing slot
-            {
-              startTime: { lte: startTime },
-              endTime: { gt: startTime },
-            },
-            // Updated slot ends during existing slot
-            {
-              startTime: { lt: endTime },
-              endTime: { gte: endTime },
-            },
-            // Updated slot entirely contains existing slot
-            {
-              startTime: { gte: startTime },
-              endTime: { lte: endTime },
-            },
-          ],
-        },
-      });
-
-      if (overlappingSlot) {
-        throw new BadRequestException(
-          'Availability slot overlaps with an existing slot',
-        );
-      }
-    }
-
-    // Update availability slot
-    return this.prisma.staffAvailability.update({
-      where: { id },
-      data: updateData,
-    });
-  }
-
-  async removeStaffAvailability(id: string) {
-    // Check if availability slot exists
-    const availabilitySlot = await this.prisma.staffAvailability.findUnique({
-      where: { id },
-    });
-
-    if (!availabilitySlot) {
-      throw new NotFoundException(`Availability slot with ID ${id} not found`);
-    }
-
-    // Delete availability slot
-    await this.prisma.staffAvailability.delete({
-      where: { id },
-    });
-
-    return { message: 'Availability slot deleted successfully' };
-  }
-
-  async getAvailableStaff(date: Date, serviceId: string) {
-    // Get the service to determine duration
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
-    });
-
-    if (!service) {
-      throw new NotFoundException(`Service with ID ${serviceId} not found`);
-    }
-
-    // Calculate end time based on service duration
-    const startTime = new Date(date);
-    const endTime = new Date(
-      startTime.getTime() + service.durationMinutes * 60000,
-    );
-
-    // Get the day of the week (0-6, Sunday to Saturday)
-    const dayOfWeek = startTime.getDay();
-
-    // Get all staff with available time slots for this day and time range
-    const availableStaff = await this.prisma.user.findMany({
-      where: {
-        role: {
-          name: 'staff',
-        },
-        status: 'active',
-        staffAvailability: {
-          some: {
-            dayOfWeek,
-            isAvailable: true,
-            startTime: {
-              lte: new Date(
-                `1970-01-01T${startTime.getHours()}:${startTime.getMinutes()}:00Z`,
-              ),
-            },
-            endTime: {
-              gte: new Date(
-                `1970-01-01T${endTime.getHours()}:${endTime.getMinutes()}:00Z`,
-              ),
-            },
-          },
-        },
-        // Exclude staff who already have schedules during this time
-        NOT: {
-          schedules: {
-            some: {
-              OR: [
-                // Existing schedule starts during requested time
-                {
-                  startTime: { gte: startTime, lt: endTime },
-                },
-                // Existing schedule ends during requested time
-                {
-                  endTime: { gt: startTime, lte: endTime },
-                },
-                // Existing schedule completely contains requested time
-                {
-                  startTime: { lte: startTime },
-                  endTime: { gte: endTime },
-                },
-              ],
-            },
-          },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-      },
-    });
-
-    return availableStaff;
-  }
-
-  async autoGenerateSchedules() {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleAutoScheduling(): Promise<void> {
     const today = new Date();
+    this.logger.log('Running Auto-Scheduler...');
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 1; i <= 3; i++) {
       const targetDate = new Date(today);
       targetDate.setDate(today.getDate() + i);
 
-      const dayOfWeek = targetDate.getDay(); // 0 (Sunday) - 6 (Saturday)
-      const dateOnly = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      await this.generateSchedulesForDate(targetDate);
+    }
 
-      // Get all MonthSchedules matching the day
-      const monthSchedules = await this.prisma.monthSchedule.findMany({
-        where: {
-          dayOfWeek,
-          booking: {
-            status: 'booked',
-            type: 'subscription',
+    this.logger.log('Auto-Scheduler completed.');
+  }
+
+  private async generateSchedulesForDate(date: Date): Promise<void> {
+    const dayOfWeek = date.getDay(); // 0-6
+    const weekNumber = this.getWeekNumberInMonth(date);
+
+    const monthSchedules = await this.prisma.monthSchedule.findMany({
+      where: {
+        dayOfWeek,
+        weekOfMonth: weekNumber, // ✅ FIXED: Changed from weekNumberInMonth
+        skip: false,
+      },
+      include: {
+        booking: {
+          include: {
+            service: true,
           },
-          skip: false,
-        },
-        include: {
-          booking: {
-            include: {
-              customer: true,
-              service: true,
-            },
+        }, // ✅ to access serviceId if needed via booking
+      },
+    });
+
+    for (const ms of monthSchedules) {
+      const startTime = this.mergeDateTime(date, ms.time);
+      const duration = ms.booking?.service?.durationMinutes ?? 60; // fallback to 60 mins
+      const endTime = new Date(startTime.getTime() + duration * 60000);
+
+      const existingSchedule = await this.prisma.schedule.findFirst({
+        where: {
+          bookingId: ms.bookingId,
+          startTime: {
+            gte: new Date(date.setHours(0, 0, 0, 0)),
+            lt: new Date(date.setHours(23, 59, 59, 999)),
           },
         },
       });
 
-      for (const ms of monthSchedules) {
-        const scheduleExists = await this.prisma.schedule.findFirst({
-          where: {
-            bookingId: ms.bookingId,
-            startTime: {
-              gte: new Date(`${dateOnly}T00:00:00Z`),
-              lt: new Date(`${dateOnly}T23:59:59Z`),
-            },
-          },
-        });
+      if (existingSchedule) continue;
 
-        if (scheduleExists) continue;
-
-        const [hours, minutes] = ms.time.split(':').map(Number);
-        const startTime = new Date(dateOnly);
-        startTime.setHours(hours, minutes);
-
-        const endTime = new Date(startTime);
-        endTime.setMinutes(
-          startTime.getMinutes() + ms.booking.service.durationMinutes,
+      const availableStaff = await this.findAvailableStaff(startTime, endTime);
+      if (!availableStaff) {
+        this.logger.warn(
+          `No available staff for bookingId ${ms.bookingId} on ${date.toDateString()}`,
         );
-
-        // Choose an available staff member (simplified here)
-        const availableStaff = await this.prisma.user.findFirst({
-          where: {
-            role: { name: 'staff' },
-            staffAvailability: {
-              some: {
-                dayOfWeek,
-                isAvailable: true,
-                startTime: { lte: startTime },
-                endTime: { gte: endTime },
-              },
-            },
-          },
-        });
-
-        if (!availableStaff) continue;
-
-        // await this.prisma.schedule.create({
-        //   data: {
-        //     bookingId: ms.bookingId,
-        //     staffId: availableStaff.id,
-        //     status: ScheduleStatus.scheduled,
-        //     startTime,
-        //     endTime,
-        //   },
-        // });
+        continue;
       }
+
+      await this.prisma.schedule.create({
+        data: {
+          bookingId: ms.bookingId,
+          serviceId: ms.booking.serviceId, // ✅ from joined booking
+          staffId: availableStaff.id,
+          startTime,
+          endTime,
+          status: 'scheduled', // ✅ FIXED ENUM: use lowercase
+        },
+      });
+
+      this.logger.log(
+        `Scheduled booking ${ms.bookingId} with staff ${availableStaff.id} on ${startTime}`,
+      );
     }
+  }
+
+  private async findAvailableStaff(
+    start: Date,
+    end: Date,
+  ): Promise<User | null> {
+    const staffList = await this.prisma.user.findMany({
+      where: {
+        role: {
+          name: 'staff', // ✅ FIXED: Assuming roles are related via `role`
+        },
+      },
+    });
+
+    for (const staff of staffList) {
+      const hasConflict = await this.prisma.schedule.findFirst({
+        where: {
+          staffId: staff.id,
+          startTime: { lt: end },
+          endTime: { gt: start },
+        },
+      });
+
+      if (!hasConflict) return staff;
+    }
+
+    return null;
+  }
+
+  private mergeDateTime(date: Date, timeStr: string): Date {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const result = new Date(date);
+    result.setHours(hours, minutes, 0, 0);
+    return result;
+  }
+
+  private getWeekNumberInMonth(date: Date): number {
+    const first = new Date(date.getFullYear(), date.getMonth(), 1);
+    const dayOfMonth = date.getDate();
+    const weekIndex = Math.floor((dayOfMonth + first.getDay() - 1) / 7);
+    return weekIndex + 1;
   }
 }
