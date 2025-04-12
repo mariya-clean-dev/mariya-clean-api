@@ -240,12 +240,23 @@ export class ServicesService {
     const price_per_room = Number(service.room_rate);
     const price_per_bathroom = Number(service.bathroom_rate);
 
+    let roomCompount = no_of_rooms - 1;
+    let bathCompount = no_of_bathrooms - 1;
+
+    if (no_of_rooms <= 0) {
+      roomCompount = 0;
+    }
+
+    if (no_of_bathrooms <= 0) {
+      bathCompount = 0;
+    }
+
     // Step 2: Calculate base price (without any subscription adjustments)
     const baseCalculatedPrice =
       base_price +
       ((square_feet - 1000) / 500) * price_per_sqft +
-      (no_of_rooms - 1) * price_per_room +
-      (no_of_bathrooms - 1) * price_per_bathroom;
+      roomCompount * price_per_room +
+      bathCompount * price_per_bathroom;
 
     // Step 3: Get subscription types
     const subscriptionTypes = await this.prisma.subscriptionType.findMany();
@@ -267,7 +278,7 @@ export class ServicesService {
     });
 
     const onetimeEstimate = {
-      subscriptionTypeId: "notASubcriptionTypeId",
+      subscriptionTypeId: 'notASubcriptionTypeId',
       subscriptionName: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
