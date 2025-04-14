@@ -219,7 +219,7 @@ export class BookingsService {
       include: {
         customer: {
           select: {
-            id: true,
+            id: true,  
             name: true,
             email: true,
             phone: true,
