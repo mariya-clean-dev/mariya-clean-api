@@ -12,6 +12,7 @@ import {
   IsEmail,
   IsInt,
   ValidateIf,
+  Min,
 } from 'class-validator';
 import { ServiceType } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -78,6 +79,16 @@ export class CreateBookingDto {
   @IsNumber()
   @IsNotEmpty()
   areaSize: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  no_of_rooms: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  @Min(0)
+  no_of_bathrooms: number;
 
   @IsBoolean()
   @IsOptional()

@@ -126,6 +126,8 @@ export class BookingsService {
         serviceId: createBookingDto.serviceId,
         type: createBookingDto.type,
         areaSize: createBookingDto.areaSize,
+        noOfRooms: createBookingDto.no_of_rooms,
+        noOfBathRooms: createBookingDto.no_of_bathrooms,
         isEco: createBookingDto.isEco || false,
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
@@ -223,20 +225,24 @@ export class BookingsService {
             phone: true,
           },
         },
-        assignedStaff:
-          role === 'admin' || role === 'customer'
-            ? {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  phone: true,
-                },
-              }
-            : undefined,
-        service: true,
+        // assignedStaff:
+        //   role === 'admin' || role === 'customer'
+        //     ? {
+        //         select: {
+        //           id: true,
+        //           name: true,
+        //           email: true,
+        //           phone: true,
+        //         },
+        //       }
+        //     : undefined,
+        // service: true,
         monthSchedules: true,
-        bookingAddress: true,
+        bookingAddress: {
+          include: {
+            address: true,
+          },
+        },
         subscriptionType: true,
         schedules: true,
         bookingAddOns: {
@@ -297,29 +303,34 @@ export class BookingsService {
             phone: true,
           },
         },
-        service: true,
-        bookingAddress: true,
-        bookingLogs: {
+        bookingAddress: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: {
-            changedAt: 'desc',
+            address: true,
           },
         },
+        service: true,
+        // bookingLogs: {
+        //   include: {
+        //     user: {
+        //       select: {
+        //         id: true,
+        //         name: true,
+        //       },
+        //     },
+        //   },
+        //   orderBy: {
+        //     changedAt: 'desc',
+        //   },
+        // },
+        monthSchedules: true,
         schedules: true,
         review: true,
         transactions: true,
-        bookingAddOns: {
-          include: {
-            addOn: true,
-          },
-        },
+        // bookingAddOns: {
+        //   include: {
+        //     addOn: true,
+        //   },
+        // },
       },
     });
 

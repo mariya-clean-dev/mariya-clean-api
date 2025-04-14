@@ -188,6 +188,8 @@ model Booking {
   subscriptionTypeId String?           @map("subscription_type_id")
   assignedStaffId    String?           @map("assigned_staff_id")
   areaSize           Int               @map("area_size")
+  noOfRooms          Int               @map("no_of_rooms")@default(0)
+  noOfBathRooms      Int               @map("no_of_bathrooms")@default(0)
   propertyType       String?           @map("property_type")
   materialProvided   Boolean           @default(false) @map("material_provided")
   isEco              Boolean           @map("is_eco")

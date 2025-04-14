@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
@@ -20,6 +21,30 @@ import { Booking } from 'src/bookings/entities/booking.entity';
 dayjs.extend(weekday);
 dayjs.extend(isoWeek);
 dayjs.extend(advancedFormat);
+
+export function getDateFromWeekPattern(
+  month: number,
+  weekOfMonth: number,
+  dayOfWeek: number,
+  time: string,
+  year: number,
+): Date {
+  const [hour, minute] = time.split(':').map(Number);
+
+  // Start from 1st of given month
+  let date = new Date(year, month - 1, 1);
+
+  // Move to first occurrence of dayOfWeek
+  while (date.getDay() !== dayOfWeek) {
+    date.setDate(date.getDate() + 1);
+  }
+
+  // Add (weekOfMonth - 1) * 7 days
+  date.setDate(date.getDate() + (weekOfMonth - 1) * 7);
+  date.setHours(hour, minute, 0, 0);
+
+  return date;
+}
 
 @Injectable()
 export class SchedulerService {
@@ -168,37 +193,60 @@ export class SchedulerService {
   }
 
   async rescheduleAndAssignStaff(monthScheduleId: string, dto: RescheduleDto) {
-    const { newScheduleDate } = dto;
-
-    // Ensure date is at least 3 days ahead
+    const { month, weekOfMonth, dayOfWeek, time } = dto;
+    let { year } = dto;
+    if (!year) {
+      year = new Date().getFullYear();
+    }
+    const newScheduleDate = getDateFromWeekPattern(
+      month,
+      weekOfMonth,
+      dayOfWeek,
+      time,
+      year,
+    );
     const now = new Date();
+
     const daysDiff =
       (newScheduleDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
     if (daysDiff < 3)
-      throw new Error('Schedule date must be at least 3 days ahead.');
+      throw new ConflictException(
+        'Schedule date must be at least 3 days ahead.',
+      );
 
-    // Mark month schedule as skipped
-    const monthSchedule = await this.prisma.monthSchedule.update({
+    const monthSchedule = await this.prisma.monthSchedule.findUnique({
+      where: { id: monthScheduleId },
+    });
+    if (!monthSchedule) {
+      throw new NotFoundException('MonthSchedule not found.');
+    }
+
+    // then safely update
+    await this.prisma.monthSchedule.update({
       where: { id: monthScheduleId },
       data: { skip: true },
     });
 
-    // Find available staff
     const availableStaff = await this.findAvailableStaff(newScheduleDate);
-    if (!availableStaff) throw new Error('No available staff found.');
+    if (!availableStaff)
+      throw new ConflictException('No available staff found.');
 
-    // Create new schedule
-    const endTime = new Date(newScheduleDate.getTime() + 60 * 60 * 1000); // assume 1hr
+    const endTime = new Date(newScheduleDate.getTime() + 60 * 60 * 1000);
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: monthSchedule.bookingId },
       include: { service: true },
     });
+
+    if (booking.type == 'instant') {
+      throw new BadRequestException('You can not reschedule instant bookings.');
+    }
+
     const schedule = await this.prisma.schedule.create({
       data: {
         staff: { connect: { id: availableStaff.id } },
         booking: { connect: { id: monthSchedule.bookingId } },
-        service: { connect: { id: booking.service.id } }, // ✅ FIXED HERE
+        service: { connect: { id: booking.service.id } },
         startTime: newScheduleDate,
         endTime,
         status: 'scheduled',
@@ -256,6 +304,13 @@ export class SchedulerService {
             select: {
               id: true,
               status: true,
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
               service: {
                 select: {
                   id: true,
@@ -548,7 +603,7 @@ export class SchedulerService {
 
     for (const ms of monthSchedules) {
       const startTime = this.mergeDateTime(date, ms.time);
-      const duration = ms.booking?.service?.durationMinutes ?? 60; // fallback to 60 mins
+      const duration = ms.booking?.service?.durationMinutes ?? 120; // fallback to 60 mins
       const endTime = new Date(startTime.getTime() + duration * 60000);
 
       const existingSchedule = await this.prisma.schedule.findFirst({
