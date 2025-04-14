@@ -428,9 +428,17 @@ export class SchedulerService {
     });
 
     if (!schedule) {
-      throw new NotFoundException(`Schedule with ID ${id} not found`);
+      throw new NotFoundException(`Schedule not found`);
     }
 
+    return schedule;
+  }
+
+  async updateSheduleStatus(id: string, status: ScheduleStatus) {
+    const schedule = await this.prisma.schedule.update({
+      where: { id },
+      data: { status },
+    });
     return schedule;
   }
 

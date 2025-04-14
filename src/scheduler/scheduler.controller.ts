@@ -10,12 +10,13 @@ import {
   Query,
   BadRequestException,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { SchedulerService } from './scheduler.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { UpdateScheduleDto } from './dto/update-scheduler.dto';
+import { UpdateScheduleDto, UpdateStatusDto } from './dto/update-scheduler.dto';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
@@ -137,6 +138,31 @@ export class SchedulerController {
     @Body() updateScheduleDto: UpdateScheduleDto,
   ) {
     const updated = await this.schedulerService.update(id, updateScheduleDto);
+    return this.resposneService.successResponse(
+      'Schedule updated successfully',
+      updated,
+    );
+  }
+
+  @Patch('schedules/:id/change-status')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'staff')
+  async updateScheduleStatus(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() updateStatusDto: UpdateStatusDto,
+  ) {
+    const userRole = req.user.role;
+    const schedule = await this.schedulerService.findOne(id);
+    if (userRole == 'staff' && schedule.staff.id !== req.user.id) {
+      throw new ForbiddenException(
+        'You are not authorized to update this schedule',
+      );
+    }
+    const updated = await this.schedulerService.updateSheduleStatus(
+      id,
+      updateStatusDto.status,
+    );
     return this.resposneService.successResponse(
       'Schedule updated successfully',
       updated,
