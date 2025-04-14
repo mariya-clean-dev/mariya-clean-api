@@ -1,11 +1,26 @@
-import { IsISO8601, IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsInt,
+  IsISO8601,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class RescheduleDto {
-  // @IsNotEmpty()
-  // @IsString()
-  // staffId: string;
+  @IsInt()
+  month: number;
 
+  @IsInt()
+  weekOfMonth: number;
+
+  @IsInt()
+  dayOfWeek: number;
+
+  @IsInt()
+  @IsOptional()
+  year?: number;
+
+  @IsString()
   @IsNotEmpty()
-  @IsISO8601()
-  newScheduleDate: Date; // The new date to reschedule the staff
+  time: string;
 }
