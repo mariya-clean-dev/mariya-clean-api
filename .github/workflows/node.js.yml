@@ -34,8 +34,9 @@ jobs:
             cd /var/www/mariya-cleaning/mariya-clean-api
             git pull origin main
             npm install
-            npm run build || echo "Build script missing!"
             npx prisma migrate deploy || echo "Migration failed or not needed"
+            npx prisma generate
+            npm run build || echo "Build script missing!"
             npm run prisma:seed
             pm2 restart maria-api
 
