@@ -339,15 +339,15 @@ export class BookingsService {
     }
 
     // Check if user has permission to access this booking
-    if (
-      role !== 'admin' &&
-      booking.userId !== userId &&
-      booking.assignedStaffId !== userId
-    ) {
-      throw new ForbiddenException(
-        'You do not have permission to access this booking',
-      );
-    }
+    // if (
+    //   role !== 'admin' &&
+    //   booking.userId !== userId &&
+    //   booking.assignedStaffId !== userId
+    // ) {
+    //   throw new ForbiddenException(
+    //     'You do not have permission to access this booking',
+    //   );
+    // }
 
     return booking;
   }
