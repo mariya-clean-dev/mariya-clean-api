@@ -85,7 +85,8 @@ export class SchedulerService {
     // Parse dates
     const startTime = new Date(createScheduleDto.startTime);
     const endTime = new Date(createScheduleDto.endTime);
-
+    const actualStartTime = new Date(createScheduleDto.startTime);
+    const actualEndTime = new Date(createScheduleDto.endTime);
     // Validate time range
     if (endTime <= startTime) {
       throw new BadRequestException('End time must be after start time');
@@ -133,9 +134,11 @@ export class SchedulerService {
         service: {
           connect: { id: createScheduleDto.serviceId },
         },
-        status: ScheduleStatus.scheduled,
+        status: createScheduleDto.status || ScheduleStatus.scheduled,
         startTime,
         endTime,
+        actualStartTime,
+        actualEndTime,
       },
     });
   }
