@@ -29,6 +29,7 @@ enum ScheduleStatus {
   completed
   missed
   canceled
+  refunded
 }
 
 enum BookingStatus {

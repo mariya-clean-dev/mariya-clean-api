@@ -249,7 +249,7 @@ export class StripeService {
   }
 
   // Webhook signature verification
-  verifyWebhookSignature(
+    verifyWebhookSignature(
     payload: Buffer,
     signature: string,
     webhookSecret: string,
