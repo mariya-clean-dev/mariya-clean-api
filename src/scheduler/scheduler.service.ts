@@ -280,12 +280,20 @@ export class SchedulerService {
     }
 
     if (startDate || endDate) {
-      where.startTime = {};
+      if (!where.startTime) where.startTime = {};
+
       if (startDate) {
-        where.startTime.gte = startDate;
+        const parsedStart = new Date(startDate);
+        if (!isNaN(parsedStart.getTime())) {
+          where.startTime.gte = parsedStart;
+        }
       }
+
       if (endDate) {
-        where.startTime.lte = endDate;
+        const parsedEnd = new Date(endDate);
+        if (!isNaN(parsedEnd.getTime())) {
+          where.startTime.lte = parsedEnd;
+        }
       }
     }
 

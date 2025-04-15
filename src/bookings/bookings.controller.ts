@@ -186,7 +186,7 @@ export class BookingsController {
         }
         return null;
       })
-      .filter(Boolean); // remove nulls
+      .filter(Boolean); // remove nulls 
 
     await this.schedulerService.createMonthSchedules(monthSchedules);
     return this.responseService.successResponse(
@@ -263,7 +263,12 @@ export class BookingsController {
 
   @Post(':id/cancel')
   async cancel(@Param('id') id: string, @Request() req) {
-    return this.bookingsService.cancel(id, req.user.id, req.user.role);
+    const data = await this.bookingsService.cancel(
+      id,
+      req.user.id,
+      req.user.role,
+    );
+    return this.responseService.successResponse('Booking cancelled', data);
   }
 
   @Post(':id/review')
