@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsISO8601 } from 'class-validator';
+import { ScheduleStatus } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsISO8601,
+  IsEnum,
+} from 'class-validator';
 
 export class CreateScheduleDto {
   @IsString()
@@ -13,6 +20,10 @@ export class CreateScheduleDto {
   @IsOptional()
   bookingId?: string;
 
+  @IsEnum(ScheduleStatus)
+  @IsOptional()
+  status: ScheduleStatus;
+
   @IsISO8601()
   @IsNotEmpty()
   startTime: string;
@@ -20,4 +31,12 @@ export class CreateScheduleDto {
   @IsISO8601()
   @IsNotEmpty()
   endTime: string;
+
+  @IsISO8601()
+  @IsOptional()
+  actualStartTime: string;
+
+  @IsISO8601()
+  @IsOptional()
+  actualEndTime: string;
 }
