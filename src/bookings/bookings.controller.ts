@@ -37,6 +37,13 @@ import { PaymentsService } from 'src/payments/payments.service';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SchedulerService } from 'src/scheduler/scheduler.service';
 
+function getFirstDayOfNextMonth(): Date {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+  return new Date(year, month + 1, 1);
+}
+
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
 export class BookingsController {
@@ -111,6 +118,16 @@ export class BookingsController {
         },
       );
 
+      const sub = await this.subscrptionService.createLocalSubscriptionEntity(
+        user.id,
+        booking.serviceId,
+        RecurringType.monthly,
+        1,
+        new Date(), // current date
+        getFirstDayOfNextMonth(), // next billing date
+      );
+
+      console.log(sub);
       const session = await this.stripeService.createCheckoutSession({
         customer: customer.id,
         priceId: price.id,
@@ -186,7 +203,7 @@ export class BookingsController {
         }
         return null;
       })
-      .filter(Boolean); // remove nulls 
+      .filter(Boolean); // remove nulls
 
     await this.schedulerService.createMonthSchedules(monthSchedules);
     return this.responseService.successResponse(

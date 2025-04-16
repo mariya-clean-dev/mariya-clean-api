@@ -320,6 +320,7 @@ export class SchedulerService {
                   id: true,
                   name: true,
                   email: true,
+                  phone: true,
                 },
               },
               service: {
@@ -427,6 +428,14 @@ export class SchedulerService {
           select: {
             id: true,
             status: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
             service: {
               select: {
                 id: true,
