@@ -52,6 +52,7 @@ enum SubscriptionStatus {
   active
   paused
   canceled
+  pending
 }
 
 enum PriceType {

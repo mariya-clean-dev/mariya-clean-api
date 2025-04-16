@@ -7,7 +7,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
-import { SubscriptionStatus } from '@prisma/client';
+import {
+  RecurringType,
+  Subscription,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StripeService } from 'src/stripe/stripe.service';
 import { PaymentsService } from 'src/payments/payments.service';
@@ -185,6 +189,28 @@ export class SubscriptionsService {
         `Subscription creation failed: ${error.message}`,
       );
     }
+  }
+
+  async createLocalSubscriptionEntity(
+    userId: string,
+    serviceId: string,
+    recurringType: RecurringType,
+    recurringFrequency: number,
+    startDate: Date,
+    nextBillingDate: Date,
+    status: SubscriptionStatus = SubscriptionStatus.pending,
+  ): Promise<Subscription> {
+    return this.prisma.subscription.create({
+      data: {
+        userId,
+        serviceId,
+        status,
+        recurringType,
+        recurringFrequency,
+        startDate,
+        nextBillingDate,
+      },
+    });
   }
 
   // Update methods to use Stripe...

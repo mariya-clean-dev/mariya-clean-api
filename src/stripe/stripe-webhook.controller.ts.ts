@@ -12,7 +12,12 @@ import { Request } from 'express';
 import { StripeService } from './stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { TransactionStatus } from '@prisma/client';
+import {
+  NotificationType,
+  Prisma,
+  SubscriptionStatus,
+  TransactionStatus,
+} from '@prisma/client';
 
 @Controller('webhooks')
 export class StripeWebhookController {
@@ -59,6 +64,15 @@ export class StripeWebhookController {
         case 'customer.subscription.deleted':
           await this.handleSubscriptionDeleted(event.data.object);
           break;
+        case 'checkout.session.completed':
+          await this.handleCheckoutSessionCompleted(event.data.object);
+          break;
+        case 'checkout.session.expired':
+          await this.handleCheckoutSessionExpired(event.data.object);
+          break;
+        case 'invoice.payment_succeeded':
+          await this.handleInvoicePaymentSucceeded(event.data.object);
+          break;
         // Add more event types as needed
       }
 
@@ -69,6 +83,7 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentSucceeded(paymentIntent: any) {
+    console.log('handlePaymentIntentSucceeded');
     // Find the related booking by metadata
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
@@ -237,6 +252,76 @@ export class StripeWebhookController {
         return 'canceled';
       default:
         return 'active';
+    }
+  }
+
+  private async handleCheckoutSessionCompleted(session: any) {
+    const subscriptionId = session.subscription;
+    const customerEmail = session.customer_email;
+    const internalSubId = session.metadata?.subscriptionId;
+
+    if (internalSubId) {
+      await this.prisma.subscription.update({
+        where: { id: internalSubId },
+        data: {
+          stripeSubscriptionId: subscriptionId,
+          status: 'active',
+        },
+      });
+
+      await this.notificationsService.createNotification({
+        userId: session.metadata.userId,
+        title: 'Subscription Activated',
+        message: 'Your subscription has been successfully activated.',
+        notificationType: NotificationType.payment_confirmation,
+      });
+    }
+  }
+
+  private async handleCheckoutSessionExpired(session: any) {
+    const internalSubId = session.metadata?.subscriptionId;
+
+    if (internalSubId) {
+      await this.prisma.subscription.update({
+        where: { id: internalSubId },
+        data: {
+          status: SubscriptionStatus.paused,
+          cancellationReason: 'Checkout session expired',
+        },
+      });
+    }
+  }
+
+  private async handleInvoicePaymentSucceeded(invoice: any) {
+    const subscriptionId = invoice.subscription;
+
+    const internalSub = await this.prisma.subscription.findFirst({
+      where: { stripeSubscriptionId: subscriptionId },
+      include: {
+        bookings: true,
+      },
+    });
+
+    if (internalSub) {
+      await this.prisma.transaction.create({
+        data: {
+          bookingId: internalSub.bookings[0]?.id ?? '', // optional: link a booking if relevant
+          stripeInvoiceId: invoice.id,
+          stripePaymentId: invoice.payment_intent as string,
+          amount: new Prisma.Decimal(invoice.amount_paid / 100),
+          currency: invoice.currency,
+          status: TransactionStatus.successful,
+          paymentMethod: invoice.payment_intent ? 'card' : 'unknown',
+          transactionType: 'subscription_payment',
+        },
+      });
+
+      await this.notificationsService.createNotification({
+        userId: internalSub.userId,
+        title: 'Subscription Renewal',
+        message: `Your subscription has been successfully renewed.`,
+        notificationType: 'payment_confirmation',
+      });
     }
   }
 }
