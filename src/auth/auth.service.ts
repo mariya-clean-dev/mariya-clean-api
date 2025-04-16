@@ -10,6 +10,8 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
+import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from 'src/mailer/mailer.service';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +19,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -125,6 +128,7 @@ export class AuthService {
     // In a real application, you would send the OTP via email
     // For development purposes, return it directly
     if (process.env.NODE_ENV !== 'production') {
+      await this.mailService.sendOtpEmail(user.email, user.name, otp);
       return {
         message:
           'OTP generated successfully. In production, this would be sent via email.',

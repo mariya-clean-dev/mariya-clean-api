@@ -15,6 +15,7 @@ import { RegionsModule } from './regions/regions.module';
 import { StripeModule } from './stripe/stripe.module';
 import { ResponseModule } from './response/response.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MailerModule } from './mailer/mailer.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     StripeModule,
     ResponseModule,
     ScheduleModule.forRoot(),
+    MailerModule,
   ],
 })
 export class AppModule {}
