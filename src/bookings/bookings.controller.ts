@@ -88,6 +88,12 @@ export class BookingsController {
         Number(booking.price),
         'usd',
         customer.id,
+        {
+          metadata: {
+            bookingId: booking.id.toString(),
+            userId: user.id.toString(),
+          },
+        },
       );
 
       stripeData = {

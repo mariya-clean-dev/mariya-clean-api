@@ -41,11 +41,13 @@ export class StripeService {
     amount: number,
     currency: string = 'usd',
     customerId?: string,
+    meta?: any,
   ): Promise<Stripe.PaymentIntent> {
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: Math.round(amount * 100), // Convert to cents
       currency,
       payment_method_types: ['card'],
+      metadata: meta,
     };
 
     if (customerId) {
@@ -249,7 +251,7 @@ export class StripeService {
   }
 
   // Webhook signature verification
-    verifyWebhookSignature(
+  verifyWebhookSignature(
     payload: Buffer,
     signature: string,
     webhookSecret: string,
