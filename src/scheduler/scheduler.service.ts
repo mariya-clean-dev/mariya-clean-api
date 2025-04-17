@@ -525,12 +525,12 @@ export class SchedulerService {
     endDate: Date,
   ): Promise<void> {
     //let currentDate = new Date(startDate);
-
     for (
       let currentDate = new Date(startDate);
-      currentDate <= endDate;
+      currentDate <= new Date(endDate);
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
+      console.log({ currentDate: currentDate });
       const week = getWeekOfMonth(currentDate);
       if (week === 5) {
         currentDate.setDate(currentDate.getDate() + 1);
@@ -550,13 +550,11 @@ export class SchedulerService {
         },
         include: { monthSchedules: true, service: true },
       });
-
       for (const booking of bookings) {
         const schedulesForDay = booking.monthSchedules.filter(
           (ms: any) =>
             ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
         );
-
         if (schedulesForDay.length === 0) continue;
 
         const alreadyScheduled = await this.checkIfBookingScheduled(
@@ -573,7 +571,9 @@ export class SchedulerService {
             booking.areaSize,
             booking.service.durationMinutes,
           );
-          const endDateTime = new Date(startDateTime.getTime() + durationMins);
+          const endDateTime = new Date(
+            startDateTime.getTime() + durationMins * 60 * 1000,
+          );
 
           const availableStaff = await this.findAvailableStaffSlot(
             ms.weekOfMonth,
@@ -691,8 +691,10 @@ export class SchedulerService {
     startTime: Date,
     endTime: Date,
   ) {
+    console.log({ startTime: startTime });
     const unavailableStaffSlots = await this.prisma.staffAvailability.findMany({
       where: {
+        date: startTime,
         dayOfWeek,
         weekOfMonth,
         startTime,
