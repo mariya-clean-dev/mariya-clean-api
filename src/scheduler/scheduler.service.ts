@@ -775,9 +775,6 @@ export class SchedulerService {
 
     const currentDate = new Date(date);
     const week = getWeekOfMonth(currentDate);
-    if (week === 5) {
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
     const day = currentDate.getDay();
 
     await this.prisma.schedule.create({
