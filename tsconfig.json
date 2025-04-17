@@ -19,5 +19,5 @@
     "noFallthroughCasesInSwitch": false,
     "resolveJsonModule": true,
   },
-   "include": ["src/**/*", "src/mailer/templates/**/*"]
+   "include": ["src/**/*", "mailer/templates/**/*"]
 }
