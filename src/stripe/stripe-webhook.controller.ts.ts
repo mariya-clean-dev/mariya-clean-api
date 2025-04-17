@@ -18,6 +18,7 @@ import {
   SubscriptionStatus,
   TransactionStatus,
 } from '@prisma/client';
+import { MailService } from 'src/mailer/mailer.service';
 
 @Controller('webhooks')
 export class StripeWebhookController {
@@ -26,6 +27,7 @@ export class StripeWebhookController {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly mailService: MailService,
   ) {}
 
   @Post('stripe')
@@ -89,7 +91,13 @@ export class StripeWebhookController {
       const bookingId = paymentIntent.metadata.bookingId;
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
-        include: { service: true },
+        include: {
+          service: true,
+          customer: true,
+          bookingAddress: {
+            include: { address: true },
+          },
+        },
       });
 
       if (booking) {
@@ -106,6 +114,13 @@ export class StripeWebhookController {
             transactionType: 'payment',
           },
         });
+
+        await this.mailService.sendBookingConfirmationEmail(
+          booking.customer.email,
+          booking.customer.name,
+          booking.service.name,
+          booking.bookingAddress.address.line_1,
+        );
 
         // Notify the customer
         await this.notificationsService.createNotification({
@@ -269,6 +284,25 @@ export class StripeWebhookController {
           status: 'active',
         },
       });
+
+      const bookingId = session.metadata.bookingId;
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          service: true,
+          customer: true,
+          bookingAddress: {
+            include: { address: true },
+          },
+        },
+      });
+
+      await this.mailService.sendBookingConfirmationEmail(
+        booking.customer.email,
+        booking.customer.name,
+        booking.service.name,
+        booking.bookingAddress.address.line_1,
+      );
 
       await this.notificationsService.createNotification({
         userId: session.metadata.userId,
