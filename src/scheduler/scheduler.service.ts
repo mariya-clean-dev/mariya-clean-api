@@ -22,30 +22,6 @@ dayjs.extend(weekday);
 dayjs.extend(isoWeek);
 dayjs.extend(advancedFormat);
 
-export function getDateFromWeekPattern(
-  month: number,
-  weekOfMonth: number,
-  dayOfWeek: number,
-  time: string,
-  year: number,
-): Date {
-  const [hour, minute] = time.split(':').map(Number);
-
-  // Start from 1st of given month
-  let date = new Date(year, month - 1, 1);
-
-  // Move to first occurrence of dayOfWeek
-  while (date.getDay() !== dayOfWeek) {
-    date.setDate(date.getDate() + 1);
-  }
-
-  // Add (weekOfMonth - 1) * 7 days
-  date.setDate(date.getDate() + (weekOfMonth - 1) * 7);
-  date.setHours(hour, minute, 0, 0);
-
-  return date;
-}
-
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
@@ -193,70 +169,6 @@ export class SchedulerService {
     }
 
     return null;
-  }
-
-  async rescheduleAndAssignStaff(monthScheduleId: string, dto: RescheduleDto) {
-    const { month, weekOfMonth, dayOfWeek, time } = dto;
-    let { year } = dto;
-    if (!year) {
-      year = new Date().getFullYear();
-    }
-    const newScheduleDate = getDateFromWeekPattern(
-      month,
-      weekOfMonth,
-      dayOfWeek,
-      time,
-      year,
-    );
-    const now = new Date();
-
-    const daysDiff =
-      (newScheduleDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysDiff < 3)
-      throw new ConflictException(
-        'Schedule date must be at least 3 days ahead.',
-      );
-
-    const monthSchedule = await this.prisma.monthSchedule.findUnique({
-      where: { id: monthScheduleId },
-    });
-    if (!monthSchedule) {
-      throw new NotFoundException('MonthSchedule not found.');
-    }
-
-    // then safely update
-    await this.prisma.monthSchedule.update({
-      where: { id: monthScheduleId },
-      data: { skip: true },
-    });
-
-    const availableStaff = await this.findAvailableStaff(newScheduleDate);
-    if (!availableStaff)
-      throw new ConflictException('No available staff found.');
-
-    const endTime = new Date(newScheduleDate.getTime() + 60 * 60 * 1000);
-
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: monthSchedule.bookingId },
-      include: { service: true },
-    });
-
-    if (booking.type == 'instant') {
-      throw new BadRequestException('You can not reschedule instant bookings.');
-    }
-
-    const schedule = await this.prisma.schedule.create({
-      data: {
-        staff: { connect: { id: availableStaff.id } },
-        booking: { connect: { id: monthSchedule.bookingId } },
-        service: { connect: { id: booking.service.id } },
-        startTime: newScheduleDate,
-        endTime,
-        status: 'scheduled',
-      },
-    });
-
-    return { message: 'Staff assigned and rescheduled successfully', schedule };
   }
 
   async findAll(
@@ -600,77 +512,106 @@ export class SchedulerService {
     const today = new Date();
     this.logger.log('Running Auto-Scheduler...');
 
-    for (let i = 1; i <= 3; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + 45);
 
-      await this.generateSchedulesForDate(targetDate);
-    }
+    await this.generateSchedulesForDate(today, targetDate);
 
     this.logger.log('Auto-Scheduler completed.');
   }
 
-  private async generateSchedulesForDate(date: Date): Promise<void> {
-    const dayOfWeek = date.getDay(); // 0-6
-    const weekNumber = this.getWeekNumberInMonth(date);
+  async generateSchedulesForDate(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<void> {
+    //let currentDate = new Date(startDate);
 
-    const monthSchedules = await this.prisma.monthSchedule.findMany({
-      where: {
-        dayOfWeek,
-        weekOfMonth: weekNumber, // ✅ FIXED: Changed from weekNumberInMonth
-        skip: false,
-      },
-      include: {
-        booking: {
-          include: {
-            service: true,
-          },
-        }, // ✅ to access serviceId if needed via booking
-      },
-    });
-
-    for (const ms of monthSchedules) {
-      const startTime = this.mergeDateTime(date, ms.time);
-      const duration = ms.booking?.service?.durationMinutes ?? 120; // fallback to 60 mins
-      const endTime = new Date(startTime.getTime() + duration * 60000);
-
-      const existingSchedule = await this.prisma.schedule.findFirst({
-        where: {
-          bookingId: ms.bookingId,
-          startTime: {
-            gte: new Date(date.setHours(0, 0, 0, 0)),
-            lt: new Date(date.setHours(23, 59, 59, 999)),
-          },
-        },
-      });
-
-      if (existingSchedule) continue;
-
-      const availableStaff = await this.findAvailableStaff(startTime);
-      if (!availableStaff) {
-        this.logger.warn(
-          `No available staff for bookingId ${ms.bookingId} on ${date.toDateString()}`,
-        );
+    for (
+      let currentDate = new Date(startDate);
+      currentDate <= endDate;
+      currentDate.setDate(currentDate.getDate() + 1)
+    ) {
+      const week = getWeekOfMonth(currentDate);
+      if (week === 5) {
+        currentDate.setDate(currentDate.getDate() + 1);
         continue;
       }
+      const day = currentDate.getDay();
 
-      await this.prisma.schedule.create({
-        data: {
-          bookingId: ms.bookingId,
-          serviceId: ms.booking.serviceId, // ✅ from joined booking
-          staffId: availableStaff.id,
-          startTime,
-          endTime,
-          status: 'scheduled', // ✅ FIXED ENUM: use lowercase
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          monthSchedules: {
+            some: {
+              weekOfMonth: week,
+              dayOfWeek: day,
+              skip: false, // Optional: to filter out skipped schedules
+            },
+          },
         },
+        include: { monthSchedules: true, service: true },
       });
 
-      this.logger.log(
-        `Scheduled booking ${ms.bookingId} with staff ${availableStaff.id} on ${startTime}`,
-      );
+      for (const booking of bookings) {
+        const schedulesForDay = booking.monthSchedules.filter(
+          (ms: any) =>
+            ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
+        );
+
+        if (schedulesForDay.length === 0) continue;
+
+        const alreadyScheduled = await this.checkIfBookingScheduled(
+          booking.id,
+          currentDate,
+        );
+        if (alreadyScheduled) continue;
+
+        for (const ms of schedulesForDay) {
+          const [hours, minutes] = ms.time.split(':').map(Number);
+          const startDateTime = new Date(currentDate);
+          startDateTime.setHours(hours, minutes, 0);
+          const durationMins = getDurationFromAreaSize(
+            booking.areaSize,
+            booking.service.durationMinutes,
+          );
+          const endDateTime = new Date(startDateTime.getTime() + durationMins);
+
+          const availableStaff = await this.findAvailableStaffSlot(
+            ms.weekOfMonth,
+            ms.dayOfWeek,
+            startDateTime,
+            endDateTime,
+          );
+
+          await this.saveSchedule({
+            date: formatDate(currentDate),
+            startTime: formatTime(startDateTime),
+            endTime: formatTime(endDateTime),
+            bookingId: booking.id,
+            staffId: availableStaff.id,
+            serviceId: booking.service.id,
+          });
+        }
+      }
     }
   }
 
+  async checkIfBookingScheduled(bookingId: string, date: Date) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return await this.prisma.schedule.findFirst({
+      where: {
+        bookingId,
+        startTime: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+    });
+  }
   // private async findAvailableStaff(
   //   start: Date,
   //   end: Date,
@@ -698,17 +639,119 @@ export class SchedulerService {
   //   return null;
   // }
 
-  private mergeDateTime(date: Date, timeStr: string): Date {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const result = new Date(date);
-    result.setHours(hours, minutes, 0, 0);
-    return result;
+  async saveSchedule(params: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    bookingId: string;
+    staffId: string;
+    serviceId: string;
+  }) {
+    const { date, startTime, endTime, bookingId, staffId } = params;
+
+    const currentDate = new Date(date);
+    const week = getWeekOfMonth(currentDate);
+    if (week === 5) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    const day = currentDate.getDay();
+
+    await this.prisma.schedule.create({
+      data: {
+        startTime: new Date(`${params.date}T${params.startTime}`),
+        endTime: new Date(`${params.date}T${params.endTime}`),
+        booking: {
+          connect: { id: params.bookingId },
+        },
+        service: {
+          connect: { id: params.serviceId },
+        },
+        staff: {
+          connect: { id: params.staffId },
+        },
+        status: 'scheduled',
+      },
+    });
+
+    await this.prisma.staffAvailability.create({
+      data: {
+        dayOfWeek: day,
+        weekOfMonth: week,
+        staffId: params.staffId,
+        startTime: new Date(`${params.date}T${params.startTime}`),
+        endTime: new Date(`${params.date}T${params.endTime}`),
+        isAvailable: false,
+      },
+    });
   }
 
-  private getWeekNumberInMonth(date: Date): number {
-    const first = new Date(date.getFullYear(), date.getMonth(), 1);
-    const dayOfMonth = date.getDate();
-    const weekIndex = Math.floor((dayOfMonth + first.getDay() - 1) / 7);
-    return weekIndex + 1;
+  async findAvailableStaffSlot(
+    weekOfMonth: number,
+    dayOfWeek: number,
+    startTime: Date,
+    endTime: Date,
+  ) {
+    const unavailableStaffSlots = await this.prisma.staffAvailability.findMany({
+      where: {
+        dayOfWeek,
+        weekOfMonth,
+        startTime,
+        endTime,
+      },
+    });
+
+    const unavailableStaffIds = unavailableStaffSlots.map((us) => us.staffId);
+
+    const availableStaffs = await this.prisma.user.findMany({
+      where: {
+        id: {
+          notIn: unavailableStaffIds.length
+            ? unavailableStaffIds
+            : ['notADummyStaff'], // fallback if empty
+        },
+        role: { name: 'staff' },
+      },
+    });
+
+    if (!availableStaffs.length) return null;
+
+    // Pick a random staff
+    const randomIndex = Math.floor(Math.random() * availableStaffs.length);
+    return availableStaffs[randomIndex];
   }
+}
+
+export function getWeekOfMonth(date: Date): number {
+  const adjustedDate =
+    date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  return Math.ceil(adjustedDate / 7);
+}
+
+export function formatDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+export function formatTime(date: Date): string {
+  return date.toTimeString().split(' ')[0];
+}
+
+export function getDurationFromAreaSize(
+  area: number,
+  durationMinutes: number,
+): number {
+  const buffer = Number(60);
+  return buffer + 60 + Math.ceil((area - 1000) / 500) * durationMinutes;
+}
+
+export function get30MinIntervals(
+  startTime: Date,
+  durationMins: number,
+): string[] {
+  const slots: string[] = [];
+  let time = new Date(startTime);
+  for (let i = 0; i < durationMins; i += 30) {
+    slots.push(formatTime(time));
+    time.setMinutes(time.getMinutes() + 30);
+  }
+  return slots;
 }

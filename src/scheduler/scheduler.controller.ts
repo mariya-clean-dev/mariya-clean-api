@@ -44,6 +44,23 @@ export class SchedulerController {
     );
   }
 
+  @Post('auto-schedules')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async autoSchedule(
+    @Query('start') startDate: Date,
+    @Query('end') endDate: Date,
+  ) {
+    const schedule = await this.schedulerService.generateSchedulesForDate(
+      startDate,
+      endDate,
+    );
+    return this.resposneService.successResponse(
+      'Auto Schedule created successfully',
+      schedule,
+    );
+  }
+
   @Get('available-staff')
   async getAvailableStaffs(
     @Query('start') start: string,
@@ -169,16 +186,16 @@ export class SchedulerController {
     );
   }
 
-  @Patch('reschedule/:id')
-  async reschedule(
-    @Param('id') scheduleId: string,
-    @Body() rescheduleDto: RescheduleDto,
-  ) {
-    return this.schedulerService.rescheduleAndAssignStaff(
-      scheduleId,
-      rescheduleDto,
-    );
-  }
+  // @Patch('reschedule/:id')
+  // async reschedule(
+  //   @Param('id') scheduleId: string,
+  //   @Body() rescheduleDto: RescheduleDto,
+  // ) {
+  //   return this.schedulerService.rescheduleAndAssignStaff(
+  //     scheduleId,
+  //     rescheduleDto,
+  //   );
+  // }
 
   @Delete('schedules/:id')
   @UseGuards(RolesGuard)
