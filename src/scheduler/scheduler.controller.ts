@@ -61,6 +61,32 @@ export class SchedulerController {
     );
   }
 
+  @Post('generate-schedules-for-booking/:bookingId')
+  async generateSchedulesForBooking(
+    @Param('bookingId') bookingId: string,
+    @Body('numberOfDays') numberOfDays: number,
+  ) {
+    if (!numberOfDays || numberOfDays <= 0) {
+      throw new BadRequestException(
+        'Invalid number of days. It must be greater than 0.',
+      );
+    }
+
+    try {
+      await this.schedulerService.generateSchedulesForBooking(
+        bookingId,
+        numberOfDays,
+      );
+      return this.resposneService.successResponse(
+        'Sucessfully Sheduled For Booking',
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to generate schedules for booking: ${error.message}`,
+      );
+    }
+  }
+
   @Get('available-staff')
   async getAvailableStaffs(
     @Query('start') start: string,
@@ -127,6 +153,7 @@ export class SchedulerController {
   async getTimeSlots(
     @Query('weekOfMonth') weekOfMonth: number,
     @Query('dayOfWeek') dayOfWeek: number,
+    @Query('durationMins') durationMins: number,
   ) {
     if (!weekOfMonth) {
       throw new BadRequestException('params required: weekOfMonth, dayOfWeek');
@@ -134,6 +161,7 @@ export class SchedulerController {
     const timeSlots = await this.schedulerService.getTimeSlots(
       weekOfMonth,
       dayOfWeek,
+      durationMins,
     );
     return this.resposneService.successResponse('Time slots list', timeSlots);
   }
