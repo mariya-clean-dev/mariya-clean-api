@@ -19,6 +19,7 @@ import {
   TransactionStatus,
 } from '@prisma/client';
 import { MailService } from 'src/mailer/mailer.service';
+import { SchedulerService } from 'src/scheduler/scheduler.service';
 
 @Controller('webhooks')
 export class StripeWebhookController {
@@ -28,6 +29,7 @@ export class StripeWebhookController {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly mailService: MailService,
+    private readonly shedulerService: SchedulerService,
   ) {}
 
   @Post('stripe')
@@ -121,6 +123,8 @@ export class StripeWebhookController {
           booking.service.name,
           booking.bookingAddress.address.line_1,
         );
+
+        await this.shedulerService.generateSchedulesForBooking(booking.id);
 
         // Notify the customer
         await this.notificationsService.createNotification({
@@ -296,6 +300,8 @@ export class StripeWebhookController {
           },
         },
       });
+
+      await this.shedulerService.generateSchedulesForBooking(booking.id);
 
       await this.mailService.sendBookingConfirmationEmail(
         booking.customer.email,
