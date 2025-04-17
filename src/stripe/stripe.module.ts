@@ -4,10 +4,10 @@ import { StripeService } from './stripe.service';
 import { StripeWebhookController } from './stripe-webhook.controller.ts';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { MailerModule } from 'src/mailer/mailer.module';
-import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulerModule } from 'src/scheduler/scheduler.module';
 
 @Module({
-  imports: [ConfigModule, NotificationsModule, MailerModule, ScheduleModule],
+  imports: [ConfigModule, NotificationsModule, MailerModule, SchedulerModule],
   providers: [StripeService],
   exports: [StripeService],
   controllers: [StripeWebhookController],
