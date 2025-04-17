@@ -20,6 +20,7 @@ import {
 } from '@prisma/client';
 import { MailService } from 'src/mailer/mailer.service';
 import { SchedulerService } from 'src/scheduler/scheduler.service';
+import { PaymentsService } from 'src/payments/payments.service';
 
 @Controller('webhooks')
 export class StripeWebhookController {
@@ -30,6 +31,7 @@ export class StripeWebhookController {
     private readonly notificationsService: NotificationsService,
     private readonly mailService: MailService,
     private readonly shedulerService: SchedulerService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   @Post('stripe')
@@ -279,7 +281,7 @@ export class StripeWebhookController {
     const customerEmail = session.customer_details.email;
     const internalSubId = session.metadata?.internalSubId;
 
-    console.log(session);
+    //    console.log(session);
     if (internalSubId) {
       await this.prisma.subscription.update({
         where: { id: internalSubId },
@@ -299,6 +301,10 @@ export class StripeWebhookController {
             include: { address: true },
           },
         },
+      });
+
+      await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
+        stripeSubscriptionId: session.subscription.toString(),
       });
 
       await this.shedulerService.generateSchedulesForBooking(booking.id);

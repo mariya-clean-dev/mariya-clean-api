@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { TransactionStatus } from '@prisma/client';
+import { BookingStatus, TransactionStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProcessRefundDto } from './dto/process-refund.dto';
 import { StripeService } from 'src/stripe/stripe.service';
@@ -275,6 +275,36 @@ export class PaymentsService {
     });
 
     return customer.id;
+  }
+
+  async markAsSuccessfulByBookingId(
+    bookingId: string,
+    data: { stripeSubscriptionId?: string; stripePaymentIntentId?: string },
+  ): Promise<void> {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { bookingId, status: TransactionStatus.pending },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(
+        `Transaction not found for booking ID ${bookingId}`,
+      );
+    }
+
+    await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        status: TransactionStatus.successful,
+        // stripeSubscriptionId: data.stripeSubscriptionId ?? undefined,
+        stripePaymentId: data.stripePaymentIntentId ?? undefined,
+      },
+    });
+
+    // Optionally: Update booking status to 'paid'
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: BookingStatus.booked },
+    });
   }
 
   async saveTransaction(data: {

@@ -37,6 +37,7 @@ import { PaymentsService } from 'src/payments/payments.service';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SchedulerService } from 'src/scheduler/scheduler.service';
 import { MailService } from 'src/mailer/mailer.service';
+import { stringify } from 'querystring';
 
 function getFirstDayOfNextMonth(): Date {
   const now = new Date();
@@ -91,10 +92,8 @@ export class BookingsController {
         'usd',
         customer.id,
         {
-          metadata: {
-            bookingId: booking.id.toString(),
-            userId: user.id.toString(),
-          },
+          bookingId: String(booking.id),
+          userId: String(user.id),
         },
       );
 

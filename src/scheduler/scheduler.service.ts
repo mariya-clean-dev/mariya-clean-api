@@ -572,7 +572,7 @@ export class SchedulerService {
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
       // console.log({ currentDate: currentDate });
-      const week = getWeekOfMonth(currentDate);
+      const week = getNthWeekdayOfMonth(currentDate);
       if (week === 5) {
         currentDate.setDate(currentDate.getDate() + 1);
         continue;
@@ -659,7 +659,7 @@ export class SchedulerService {
       currentDate <= endDate;
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
-      const week = getWeekOfMonth(currentDate);
+      const week = getNthWeekdayOfMonth(currentDate);
       if (week === 5) {
         currentDate.setDate(currentDate.getDate() + 1); // Skip week 5 (if needed)
         continue;
@@ -851,6 +851,20 @@ export function getWeekOfMonth(date: Date): number {
   const adjustedDate =
     date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay();
   return Math.ceil(adjustedDate / 7);
+}
+
+export function getNthWeekdayOfMonth(date: Date): number {
+  const dayOfWeek = date.getDay(); // 0 (Sun) to 6 (Sat)
+  let count = 0;
+
+  for (let d = 1; d <= date.getDate(); d++) {
+    const current = new Date(date.getFullYear(), date.getMonth(), d);
+    if (current.getDay() === dayOfWeek) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 export function formatDate(date: Date): string {
