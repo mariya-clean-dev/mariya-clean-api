@@ -257,9 +257,10 @@ export class StripeWebhookController {
 
   private async handleCheckoutSessionCompleted(session: any) {
     const subscriptionId = session.subscription;
-    const customerEmail = session.customer_email;
-    const internalSubId = session.metadata?.subscriptionId;
+    const customerEmail = session.customer_details.email;
+    const internalSubId = session.metadata?.internalSubId;
 
+    console.log(session);
     if (internalSubId) {
       await this.prisma.subscription.update({
         where: { id: internalSubId },

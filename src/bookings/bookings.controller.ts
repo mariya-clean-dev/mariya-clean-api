@@ -133,24 +133,28 @@ export class BookingsController {
         getFirstDayOfNextMonth(), // next billing date
       );
 
-      console.log(sub);
+      //console.log(sub);
       const session = await this.stripeService.createCheckoutSession({
         customer: customer.id,
         priceId: price.id,
         metadata: {
           bookingId: booking.id.toString(),
           userId: user.id.toString(),
+          internalSubId: sub.id,
         },
         successUrl: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${process.env.FRONTEND_URL}/payment-cancel`,
       });
-
       stripeData = {
         checkoutUrl: session.url,
       };
-
+      // console.log(session)
+      // await this.subscrptionService.update(sub.id, {
+      //   stripeSubscriptionId: String(session.subscription),
+      // });
       transactionType = 'subscription';
     }
+
     // Save transaction
     await this.paymentsService.saveTransaction({
       bookingId: booking.id,
