@@ -34,4 +34,31 @@ export class MailService {
       return { success: false, error: error.message };
     }
   }
+
+  async sendBookingConfirmationEmail(
+    to: string,
+    customerName: string,
+    serviceName: string,
+    address: string,
+    specialInstructions?: string,
+  ) {
+    try {
+      const result = await this.mailerService.sendMail({
+        to,
+        subject: 'Booking Confirmed – Clean By Maria',
+        template: 'booking-confirmation', // views/booking-confirmation.hbs
+        context: {
+          customerName,
+          serviceName,
+          address,
+          specialInstructions,
+        },
+      });
+      console.log('Booking confirmation sent:', result);
+      return { success: true, result };
+    } catch (error) {
+      console.error('Booking confirmation failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }

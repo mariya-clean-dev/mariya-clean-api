@@ -9,11 +9,13 @@ import { StripeModule } from 'src/stripe/stripe.module';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { SubscriptionsModule } from 'src/subscriptions/subscriptions.module';
 import { SchedulerModule } from 'src/scheduler/scheduler.module';
+import { MailerModule } from 'src/mailer/mailer.module';
 
 @Module({
   imports: [
     PrismaModule,
     NotificationsModule,
+    MailerModule,
     ResponseModule,
     UsersModule,
     StripeModule,

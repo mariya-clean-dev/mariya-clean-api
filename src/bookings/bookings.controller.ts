@@ -36,6 +36,7 @@ import { StripeService } from 'src/stripe/stripe.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SchedulerService } from 'src/scheduler/scheduler.service';
+import { MailService } from 'src/mailer/mailer.service';
 
 function getFirstDayOfNextMonth(): Date {
   const now = new Date();
@@ -55,6 +56,7 @@ export class BookingsController {
     private readonly paymentsService: PaymentsService,
     private readonly subscrptionService: SubscriptionsService,
     private readonly schedulerService: SchedulerService,
+    private readonly mailService: MailService,
   ) {}
 
   @Post()
@@ -216,6 +218,12 @@ export class BookingsController {
       .filter(Boolean); // remove nulls
 
     await this.schedulerService.createMonthSchedules(monthSchedules);
+    // await this.mailService.sendBookingConfirmationEmail(
+    //   user.email,
+    //   user.name,
+    //   booking.service.name,
+    //   user.address.line_1,
+    // );
     return this.responseService.successResponse(
       'Booking successfully saved... proceed to payment',
       {
