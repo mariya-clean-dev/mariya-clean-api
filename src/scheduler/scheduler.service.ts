@@ -293,20 +293,13 @@ export class SchedulerService {
     dayOfWeek: number,
     durationMins: number = 60,
   ) {
-    const timezone = 'Asia/Kolkata';
-    const today = dayjs().startOf('day');
+    const today = dayjs().utc().startOf('day');
     const thirtyDaysLater = today.add(30, 'day');
 
-    // Step 1: Count total available staff
     const availableStaffCount = await this.prisma.user.count({
-      where: {
-        role: {
-          name: 'staff',
-        },
-      },
+      where: { role: { name: 'staff' } },
     });
 
-    // Step 2: Get all unavailable ranges within next 30 days for this week/day combo
     const unavailableRanges = await this.prisma.staffAvailability.findMany({
       where: {
         date: {
@@ -324,58 +317,46 @@ export class SchedulerService {
       },
     });
 
-    // Step 3: Find all matching dates within next 30 days
     const matchingDates: dayjs.Dayjs[] = [];
     let pointer = today.clone();
 
     while (pointer.isBefore(thirtyDaysLater)) {
       const currentWeekOfMonth = Math.ceil(pointer.date() / 7);
-      const currentDayOfWeek = pointer.day(); // Sunday = 0, Monday = 1, ..., Saturday = 6
-      //console.log(currentDayOfWeek, currentWeekOfMonth);
+      const currentDayOfWeek = pointer.day();
       if (
         currentWeekOfMonth === weekOfMonth &&
         currentDayOfWeek === dayOfWeek
       ) {
         matchingDates.push(pointer.clone());
       }
-
       pointer = pointer.add(1, 'day');
     }
 
     const startHour = 9;
     const endHour = 18;
-    const interval = 30; // minutes
+    const interval = 30;
+    const slots: { time: string; isAvailable: boolean }[] = [];
 
-    const allSlots = [];
-
-    // Step 4: For each matching date, generate time slots
     for (const date of matchingDates) {
-      const slots: { time: string; isAvailable: boolean }[] = [];
-
-      let current = date
-        .clone()
-        .tz(timezone)
-        .hour(startHour)
-        .minute(0)
-        .second(0);
+      let current = date.clone().utc().hour(startHour).minute(0).second(0);
 
       while (current.hour() < endHour) {
         const timeStr = current.format('HH:mm');
         const serviceEndTime = current.clone().add(durationMins, 'minute');
 
         const isUnavailable = unavailableRanges.some((range) => {
-          const sameDay = dayjs(range.date).isSame(current, 'day');
+          const sameDay = dayjs(range.date).utc().isSame(current, 'day');
           if (!sameDay) return false;
 
           const rangeStart = dayjs(range.date)
-            .hour(dayjs(range.startTime).hour())
-            .minute(dayjs(range.startTime).minute())
-            .tz(timezone);
+            .utc()
+            .hour(dayjs(range.startTime).utc().hour())
+            .minute(dayjs(range.startTime).utc().minute());
 
           const rangeEnd = dayjs(range.date)
-            .hour(dayjs(range.endTime).hour())
-            .minute(dayjs(range.endTime).minute())
-            .tz(timezone);
+            .utc()
+            .hour(dayjs(range.endTime).utc().hour())
+            .minute(dayjs(range.endTime).utc().minute());
 
           return (
             current.isSame(rangeStart) ||
@@ -394,15 +375,89 @@ export class SchedulerService {
 
         current = current.add(interval, 'minute');
       }
-      //return slots;
-      return slots;
-      allSlots.push({
-        date: date.format('YYYY-MM-DD'),
-        slots,
-      });
     }
 
-    return allSlots;
+    return slots;
+  }
+
+  async getTimeSlotswithDate(date: Date, durationMins: number = 60) {
+    // Convert the input date to a dayjs object and ensure it is treated as UTC
+    const inputDate = dayjs(date).utc().startOf('day'); // Start of the day in UTC, no local time offsets
+
+    // Step 1: Count total available staff
+    const availableStaffCount = await this.prisma.user.count({
+      where: {
+        role: { name: 'staff' },
+      },
+    });
+
+    // Align the start and end of the day to UTC system's time
+    const dayStart = inputDate.toDate(); // Start of the given date in UTC
+    const dayEnd = inputDate.endOf('day').toDate(); // End of the day in UTC
+
+    // console.log('Given Date:', date);
+    // console.log('Start of Day (UTC):', dayStart);
+    // console.log('End of Day (UTC):', dayEnd);
+
+    // Step 2: Get all unavailable ranges for this UTC day
+    const unavailableRanges = await this.prisma.staffAvailability.findMany({
+      where: {
+        date: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+      },
+      select: {
+        date: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    // console.log('Unavailable Ranges:', unavailableRanges);
+
+    // Step 3: Generate slots
+    const startHour = 9;
+    const endHour = 18;
+    const interval = 30; // minutes
+    const slots: { time: string; isAvailable: boolean }[] = [];
+
+    let current = inputDate.clone().hour(startHour).minute(0).second(0); // Start at 9 AM in UTC
+
+    while (current.hour() < endHour) {
+      const timeStr = current.format('HH:mm');
+      const serviceEndTime = current.clone().add(durationMins, 'minute');
+
+      const isUnavailable = unavailableRanges.some((range) => {
+        // Convert range start and end times to full dayjs objects in UTC
+        const start = dayjs(range.date)
+          .hour(dayjs(range.startTime).hour())
+          .minute(dayjs(range.startTime).minute())
+          .utc(); // Convert to UTC
+
+        const end = dayjs(range.date)
+          .hour(dayjs(range.endTime).hour())
+          .minute(dayjs(range.endTime).minute())
+          .utc(); // Convert to UTC
+
+        // Compare using UTC time for both current and unavailable times
+        return (
+          current.isSame(start) ||
+          (current.isAfter(start) && current.isBefore(end)) ||
+          (serviceEndTime.isAfter(start) &&
+            (serviceEndTime.isBefore(end) || serviceEndTime.isSame(end))) ||
+          (current.isBefore(start) && serviceEndTime.isAfter(end))
+        );
+      });
+
+      slots.push({
+        time: timeStr,
+        isAvailable: availableStaffCount > 0 && !isUnavailable,
+      });
+
+      current = current.add(interval, 'minute');
+    }
+    return slots;
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
@@ -622,7 +677,7 @@ export class SchedulerService {
       const week = getNthWeekdayOfMonth(currentDate);
       const day = currentDate.getDay();
 
-     // console.log(currentDate, day, week);
+      // console.log(currentDate, day, week);
 
       const bookings = await this.prisma.booking.findMany({
         where: {

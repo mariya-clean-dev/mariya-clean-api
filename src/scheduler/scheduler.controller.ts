@@ -23,6 +23,7 @@ import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { ResponseService } from 'src/response/response.service';
 import { RescheduleDto } from './dto/reschedule.dto';
+import { weeksToDays } from 'date-fns';
 
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
@@ -151,18 +152,54 @@ export class SchedulerController {
   @Get('time-slots')
   @Public()
   async getTimeSlots(
-    @Query('weekOfMonth') weekOfMonth: number,
-    @Query('dayOfWeek') dayOfWeek: number,
-    @Query('durationMins') durationMins: number,
+    @Query('weekOfMonth') weekOfMonthRaw?: string,
+    @Query('dayOfWeek') dayOfWeekRaw?: string,
+    @Query('date') dateRaw?: string,
+    @Query('durationMins') durationMinsRaw?: string,
   ) {
-    if (!weekOfMonth) {
-      throw new BadRequestException('params required: weekOfMonth, dayOfWeek');
+    const weekOfMonth = weekOfMonthRaw
+      ? parseInt(weekOfMonthRaw, 10)
+      : undefined;
+    const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
+    const durationMins = durationMinsRaw ? parseInt(durationMinsRaw, 10) : 60;
+    const date = dateRaw ? new Date(dateRaw) : undefined;
+
+    const hasDate = !!dateRaw && !isNaN(date.getTime());
+    const hasWeekAndDay =
+      weekOfMonth !== undefined &&
+      dayOfWeek !== undefined &&
+      !isNaN(weekOfMonth) &&
+      !isNaN(dayOfWeek);
+
+    if (!hasDate && !hasWeekAndDay) {
+      throw new BadRequestException(
+        'Provide either a valid date or both weekOfMonth and dayOfWeek',
+      );
     }
-    const timeSlots = await this.schedulerService.getTimeSlots(
-      weekOfMonth,
-      dayOfWeek,
-      durationMins,
-    );
+
+    if (hasDate && hasWeekAndDay) {
+      throw new BadRequestException(
+        'Provide either a valid date or both weekOfMonth and dayOfWeek, not both',
+      );
+    }
+
+    if (
+      hasWeekAndDay &&
+      (weekOfMonth < 1 || weekOfMonth > 4 || dayOfWeek < 0 || dayOfWeek > 6)
+    ) {
+      throw new BadRequestException(
+        'params required: valid weekOfMonth (1-4) and dayOfWeek (0-6)',
+      );
+    }
+
+    const timeSlots = hasDate
+      ? await this.schedulerService.getTimeSlotswithDate(date, durationMins)
+      : await this.schedulerService.getTimeSlots(
+          weekOfMonth,
+          dayOfWeek,
+          durationMins,
+        );
+
     return this.resposneService.successResponse('Time slots list', timeSlots);
   }
 
@@ -191,7 +228,7 @@ export class SchedulerController {
 
   @Patch('schedules/:id/change-status')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'staff')
+  // @Roles('admin', 'staff')
   async updateScheduleStatus(
     @Request() req,
     @Param('id') id: string,
