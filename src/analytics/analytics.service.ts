@@ -469,7 +469,7 @@ export class AnalyticsService {
         where: {
           role: {
             is: {
-              name: 'CLIENT',
+              name: 'customer',
             },
           },
         },
@@ -485,7 +485,7 @@ export class AnalyticsService {
         where: {
           role: {
             is: {
-              name: 'STAFF',
+              name: 'staff',
             },
           },
         },

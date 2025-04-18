@@ -191,7 +191,7 @@ export class SchedulerController {
 
   @Patch('schedules/:id/change-status')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'staff')
+  // @Roles('admin', 'staff')
   async updateScheduleStatus(
     @Request() req,
     @Param('id') id: string,
