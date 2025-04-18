@@ -16,6 +16,16 @@ import { ScheduleStatus, User } from '@prisma/client';
 import { RescheduleDto } from './dto/reschedule.dto';
 import { Booking } from 'src/bookings/entities/booking.entity';
 import isBetween from 'dayjs/plugin/isBetween';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import { compareSync } from 'bcrypt';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 dayjs.extend(isBetween);
 // dayjs.extend(isoWeek);
 // dayjs.extend(advancedFormat);
@@ -281,11 +291,13 @@ export class SchedulerService {
   async getTimeSlots(
     weekOfMonth: number,
     dayOfWeek: number,
-    durationMins: number = 60, // Default service duration
+    durationMins: number = 60,
   ) {
-    const today = new Date();
-    const thirtyDaysLater = dayjs(today).add(30, 'day').toDate();
+    const timezone = 'Asia/Kolkata';
+    const today = dayjs().startOf('day');
+    const thirtyDaysLater = today.add(30, 'day');
 
+    // Step 1: Count total available staff
     const availableStaffCount = await this.prisma.user.count({
       where: {
         role: {
@@ -294,11 +306,12 @@ export class SchedulerService {
       },
     });
 
+    // Step 2: Get all unavailable ranges within next 30 days for this week/day combo
     const unavailableRanges = await this.prisma.staffAvailability.findMany({
       where: {
         date: {
-          gte: today,
-          lte: thirtyDaysLater,
+          gte: today.toDate(),
+          lte: thirtyDaysLater.toDate(),
         },
         weekOfMonth,
         dayOfWeek,
@@ -311,49 +324,85 @@ export class SchedulerService {
       },
     });
 
-    const startHour = 9;
-    const endHour = 18;
-    const interval = 30; // 30-minute gap for slot intervals
+    // Step 3: Find all matching dates within next 30 days
+    const matchingDates: dayjs.Dayjs[] = [];
+    let pointer = today.clone();
 
-    const slots: { time: string; isAvailable: boolean }[] = [];
-
-    let current = dayjs().startOf('day').hour(startHour).minute(0).second(0);
-
-    // Iterate through each 30-minute time slot
-    while (
-      current.hour() < endHour ||
-      (current.hour() === endHour && current.minute() === 0)
-    ) {
-      const timeStr = current.format('HH:mm');
-
-      // Calculate the service end time based on the duration
-      const serviceEndTime = current.add(durationMins, 'minute');
-
-      // Check if the service duration overlaps with any unavailable ranges
-      const isUnavailable = unavailableRanges.some((range) => {
-        const rangeStart = dayjs(range.startTime);
-        const rangeEnd = dayjs(range.endTime);
-
-        // Check if the service start or end time falls within the unavailable ranges
-        return (
-          current.isBetween(rangeStart, rangeEnd, null, '[)') || // Service start overlaps with unavailable range
-          serviceEndTime.isBetween(rangeStart, rangeEnd, null, '(]') || // Service end overlaps with unavailable range
-          (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd)) // Service duration completely overlaps the range
-        );
-      });
-
-      // Only add available slots if there is available staff and no time conflicts
-      if (availableStaffCount > 0 && !isUnavailable) {
-        slots.push({ time: timeStr, isAvailable: true });
-      } else {
-        slots.push({ time: timeStr, isAvailable: false });
+    while (pointer.isBefore(thirtyDaysLater)) {
+      const currentWeekOfMonth = Math.ceil(pointer.date() / 7);
+      const currentDayOfWeek = pointer.day(); // Sunday = 0, Monday = 1, ..., Saturday = 6
+      //console.log(currentDayOfWeek, currentWeekOfMonth);
+      if (
+        currentWeekOfMonth === weekOfMonth &&
+        currentDayOfWeek === dayOfWeek
+      ) {
+        matchingDates.push(pointer.clone());
       }
 
-      // Move to the next slot with the specified interval (30 minutes)
-      current = current.add(interval, 'minute');
+      pointer = pointer.add(1, 'day');
     }
 
-    return slots;
+    const startHour = 9;
+    const endHour = 18;
+    const interval = 30; // minutes
+
+    const allSlots = [];
+
+    // Step 4: For each matching date, generate time slots
+    for (const date of matchingDates) {
+      const slots: { time: string; isAvailable: boolean }[] = [];
+
+      let current = date
+        .clone()
+        .tz(timezone)
+        .hour(startHour)
+        .minute(0)
+        .second(0);
+
+      while (current.hour() < endHour) {
+        const timeStr = current.format('HH:mm');
+        const serviceEndTime = current.clone().add(durationMins, 'minute');
+
+        const isUnavailable = unavailableRanges.some((range) => {
+          const sameDay = dayjs(range.date).isSame(current, 'day');
+          if (!sameDay) return false;
+
+          const rangeStart = dayjs(range.date)
+            .hour(dayjs(range.startTime).hour())
+            .minute(dayjs(range.startTime).minute())
+            .tz(timezone);
+
+          const rangeEnd = dayjs(range.date)
+            .hour(dayjs(range.endTime).hour())
+            .minute(dayjs(range.endTime).minute())
+            .tz(timezone);
+
+          return (
+            current.isSame(rangeStart) ||
+            (current.isAfter(rangeStart) && current.isBefore(rangeEnd)) ||
+            (serviceEndTime.isAfter(rangeStart) &&
+              (serviceEndTime.isBefore(rangeEnd) ||
+                serviceEndTime.isSame(rangeEnd))) ||
+            (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd))
+          );
+        });
+
+        slots.push({
+          time: timeStr,
+          isAvailable: availableStaffCount > 0 && !isUnavailable,
+        });
+
+        current = current.add(interval, 'minute');
+      }
+      //return slots;
+      return slots;
+      allSlots.push({
+        date: date.format('YYYY-MM-DD'),
+        slots,
+      });
+    }
+
+    return allSlots;
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
@@ -565,32 +614,30 @@ export class SchedulerService {
     startDate: Date,
     endDate: Date,
   ): Promise<void> {
-    //let currentDate = new Date(startDate);
     for (
       let currentDate = new Date(startDate);
       currentDate <= new Date(endDate);
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
-      // console.log({ currentDate: currentDate });
       const week = getNthWeekdayOfMonth(currentDate);
-      if (week === 5) {
-        currentDate.setDate(currentDate.getDate() + 1);
-        continue;
-      }
       const day = currentDate.getDay();
+
+     // console.log(currentDate, day, week);
 
       const bookings = await this.prisma.booking.findMany({
         where: {
+          type: 'subscription',
           monthSchedules: {
             some: {
               weekOfMonth: week,
               dayOfWeek: day,
-              skip: false, // Optional: to filter out skipped schedules
+              skip: false,
             },
           },
         },
         include: { monthSchedules: true, service: true },
       });
+
       for (const booking of bookings) {
         const schedulesForDay = booking.monthSchedules.filter(
           (ms: any) =>
@@ -608,6 +655,7 @@ export class SchedulerService {
           const [hours, minutes] = ms.time.split(':').map(Number);
           const startDateTime = new Date(currentDate);
           startDateTime.setHours(hours, minutes, 0);
+
           const durationMins = getDurationFromAreaSize(
             booking.areaSize,
             booking.service.durationMinutes,
@@ -617,11 +665,13 @@ export class SchedulerService {
           );
 
           const availableStaff = await this.findAvailableStaffSlot(
-            ms.weekOfMonth,
-            ms.dayOfWeek,
+            week,
+            day,
             startDateTime,
             endDateTime,
           );
+
+          if (!availableStaff) continue;
 
           await this.saveSchedule({
             date: formatDate(currentDate),
@@ -651,43 +701,34 @@ export class SchedulerService {
 
     const today = new Date();
     let endDate = new Date(today);
-    endDate.setDate(today.getDate() + numberOfDays); // Calculate the end date based on number of days
+    endDate.setDate(today.getDate() + numberOfDays);
 
-    // Loop through the number of days (i.e., for the range of days starting from today)
     for (
       let currentDate = new Date(today);
       currentDate <= endDate;
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
       const week = getNthWeekdayOfMonth(currentDate);
-      if (week === 5) {
-        currentDate.setDate(currentDate.getDate() + 1); // Skip week 5 (if needed)
-        continue;
-      }
-      const day = currentDate.getDay(); // Get the day of the week (0 to 6)
+      const day = currentDate.getDay();
 
-      // Get the relevant month schedules for the current day of the booking
       const schedulesForDay = booking.monthSchedules.filter(
         (ms: any) =>
           ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
       );
 
-      if (schedulesForDay.length === 0) continue; // Skip if no schedules exist for that day
+      if (schedulesForDay.length === 0) continue;
 
-      // Check if the booking is already scheduled for this day
       const alreadyScheduled = await this.checkIfBookingScheduled(
         booking.id,
         currentDate,
       );
-      if (alreadyScheduled) continue; // Skip if already scheduled
+      if (alreadyScheduled) continue;
 
-      // Loop through the available schedules for this day and create them
       for (const ms of schedulesForDay) {
         const [hours, minutes] = ms.time.split(':').map(Number);
         const startDateTime = new Date(currentDate);
-        startDateTime.setHours(hours, minutes, 0); // Set the start time
+        startDateTime.setHours(hours, minutes, 0);
 
-        // Calculate duration based on area size and service duration
         const durationMins = getDurationFromAreaSize(
           booking.areaSize,
           booking.service.durationMinutes,
@@ -696,15 +737,15 @@ export class SchedulerService {
           startDateTime.getTime() + durationMins * 60 * 1000,
         );
 
-        // Find available staff for this time range
         const availableStaff = await this.findAvailableStaffSlot(
-          ms.weekOfMonth,
-          ms.dayOfWeek,
+          week,
+          day,
           startDateTime,
           endDateTime,
         );
 
-        // Save the schedule for the available staff
+        if (!availableStaff) continue;
+
         await this.saveSchedule({
           date: formatDate(currentDate),
           startTime: formatTime(startDateTime),
@@ -736,32 +777,6 @@ export class SchedulerService {
       },
     });
   }
-  // private async findAvailableStaff(
-  //   start: Date,
-  //   end: Date,
-  // ): Promise<User | null> {
-  //   const staffList = await this.prisma.user.findMany({
-  //     where: {
-  //       role: {
-  //         name: 'staff', // ✅ FIXED: Assuming roles are related via `role`
-  //       },
-  //     },
-  //   });
-
-  //   for (const staff of staffList) {
-  //     const hasConflict = await this.prisma.schedule.findFirst({
-  //       where: {
-  //         staffId: staff.id,
-  //         startTime: { lt: end },
-  //         endTime: { gt: start },
-  //       },
-  //     });
-
-  //     if (!hasConflict) return staff;
-  //   }
-
-  //   return null;
-  // }
 
   async saveSchedule(params: {
     date: string;
@@ -774,7 +789,7 @@ export class SchedulerService {
     const { date, startTime, endTime, bookingId, staffId } = params;
 
     const currentDate = new Date(date);
-    const week = getWeekOfMonth(currentDate);
+    const week = getNthWeekdayOfMonth(currentDate);
     const day = currentDate.getDay();
 
     await this.prisma.schedule.create({
@@ -830,7 +845,7 @@ export class SchedulerService {
         id: {
           notIn: unavailableStaffIds.length
             ? unavailableStaffIds
-            : ['notADummyStaff'], // fallback if empty
+            : ['notADummyStaff'],
         },
         role: { name: 'staff' },
       },
@@ -838,7 +853,6 @@ export class SchedulerService {
 
     if (!availableStaffs.length) return null;
 
-    // Pick a random staff
     const randomIndex = Math.floor(Math.random() * availableStaffs.length);
     return availableStaffs[randomIndex];
   }
@@ -850,18 +864,33 @@ export function getWeekOfMonth(date: Date): number {
   return Math.ceil(adjustedDate / 7);
 }
 
-export function getNthWeekdayOfMonth(date: Date): number {
-  const dayOfWeek = date.getDay(); // 0 (Sun) to 6 (Sat)
+export function getOrdinalWeekdayOfMonth(date: Date): number {
+  const target = dayjs(date);
+  const startOfMonth = target.startOf('month');
+
   let count = 0;
 
-  for (let d = 1; d <= date.getDate(); d++) {
-    const current = new Date(date.getFullYear(), date.getMonth(), d);
-    if (current.getDay() === dayOfWeek) {
+  for (let i = 0; i < target.date(); i++) {
+    const current = startOfMonth.add(i, 'day');
+    if (current.day() === target.day()) {
       count++;
     }
   }
 
-  return count;
+  return count; // returns 0-based ordinal, so 0 = 1st, 1 = 2nd...
+}
+
+export function getNthWeekdayOfMonth(date: Date): number {
+  const day = date.getDay(); // 0 (Sun) - 6 (Sat)
+  const d = new Date(date.getFullYear(), date.getMonth(), 1);
+  let count = 0;
+
+  while (d <= date) {
+    if (d.getDay() === day) count++;
+    d.setDate(d.getDate() + 1);
+  }
+
+  return count; // 1st, 2nd, 3rd... weekday of that type in the month
 }
 
 export function formatDate(date: Date): string {
