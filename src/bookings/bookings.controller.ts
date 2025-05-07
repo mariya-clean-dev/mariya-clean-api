@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import {
   Booking,
   BookingStatus,
+  PaymentMethodEnum,
   Prisma,
   RecurringType,
   ServiceType,
@@ -38,6 +39,7 @@ import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SchedulerService } from 'src/scheduler/scheduler.service';
 import { MailService } from 'src/mailer/mailer.service';
 import { stringify } from 'querystring';
+import { RescheduleDto } from './dto/reschedule.dto';
 
 function getFirstDayOfNextMonth(): Date {
   const now = new Date();
@@ -81,142 +83,53 @@ export class BookingsController {
     let stripeInvoiceId: string | null = null;
     let stripePaymentId: string | null = null;
 
-    if (booking.type === 'instant') {
+    if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
       const customer = await this.stripeService.createCustomer(
         createBookingDto.email,
         createBookingDto.name,
       );
-
-      const paymentIntent = await this.stripeService.createPaymentIntent(
-        Number(booking.price),
-        'usd',
-        customer.id,
-        {
-          bookingId: String(booking.id),
-          userId: String(user.id),
-        },
-      );
-
-      stripeData = {
-        customerId: customer.id,
-        paymentIntent: paymentIntent.id,
-        clientSecret: paymentIntent.client_secret,
-      };
-
-      transactionType = 'instant';
-      stripePaymentId = paymentIntent.id;
-    } else if (booking.type === 'subscription') {
-      const customer = await this.stripeService.createCustomer(
-        createBookingDto.email,
-        createBookingDto.name,
-      );
-
-      const product = await this.stripeService.createProduct(
-        `Subscription for Booking ${booking.id}`,
-      );
-
-      const price = await this.stripeService.createPrice(
-        product.id,
-        Number(booking.price),
-        'usd',
-        {
-          interval: 'month',
-          interval_count: 1,
-        },
-      );
-
-      const sub = await this.subscrptionService.createLocalSubscriptionEntity(
-        user.id,
-        booking.serviceId,
-        RecurringType.monthly,
-        1,
-        new Date(), // current date
-        getFirstDayOfNextMonth(), // next billing date
-      );
-
-      //console.log(sub);
-      const session = await this.stripeService.createCheckoutSession({
-        customer: customer.id,
-        priceId: price.id,
-        metadata: {
-          bookingId: booking.id.toString(),
-          userId: user.id.toString(),
-          internalSubId: sub.id,
-        },
-        successUrl: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${process.env.FRONTEND_URL}/payment-cancel`,
+      const session = await this.stripeService.createCardSetupSession({
+        customerId: customer.id, // from DB
+        successUrl: `${process.env.FRONTEND_URL}/payment-method/success`,
+        cancelUrl: `${process.env.FRONTEND_URL}/payment-method/cancel`,
       });
       stripeData = {
         checkoutUrl: session.url,
       };
-      // console.log(session)
-      // await this.subscrptionService.update(sub.id, {
-      //   stripeSubscriptionId: String(session.subscription),
-      // });
-      transactionType = 'subscription';
     }
+    // if (booking.type === ServiceType.one_time) {
+    //   const customer = await this.stripeService.createCustomer(
+    //     createBookingDto.email,
+    //     createBookingDto.name,
+    //   );
+    // } else if (booking.type === ServiceType.recurring) {
+    //   const customer = await this.stripeService.createCustomer(
+    //     createBookingDto.email,
+    //     createBookingDto.name,
+    //   );
 
-    // Save transaction
-    await this.paymentsService.saveTransaction({
-      bookingId: booking.id,
-      stripeInvoiceId,
-      stripePaymentId,
-      amount: Number(booking.price),
-      currency: 'usd',
-      status: TransactionStatus.pending,
-      paymentMethod: 'stripe',
-      transactionType,
-    });
-    // Validate schedule dependencies
-    if (booking.subscriptionType) {
-      if (
-        booking.subscriptionType.name === 'Bi-Weekly Plan' &&
-        !createBookingDto.schedule_2
-      ) {
-        throw new ConflictException('Bi-Weekly Plan requires upto schedule 2');
-      }
+    //   const product = await this.stripeService.createProduct(
+    //     `Subscription for Booking ${booking.id}`,
+    //   );
 
-      if (
-        booking.subscriptionType.name === 'Weekly Plan' &&
-        !createBookingDto.schedule_4
-      ) {
-        throw new ConflictException('Weekly Plan requires upto schedule 4');
-      }
-      if (
-        booking.subscriptionType.name === 'Monthly Plan' &&
-        createBookingDto.schedule_2
-      ) {
-        throw new ConflictException('Multiple schedules found');
-      }
-    } else if (createBookingDto.schedule_2) {
-      throw new ConflictException('Multiple schedules found');
-    }
-    const scheduleKeys = [
-      'schedule_1',
-      'schedule_2',
-      'schedule_3',
-      'schedule_4',
-    ] as const;
+    //   const price = await this.stripeService.createPrice(
+    //     product.id,
+    //     Number(booking.price),
+    //     'usd',
+    //     {
+    //       interval: 'month',
+    //       interval_count: 1,
+    //     },
+    //   );
 
-    const monthSchedules = scheduleKeys
-      .map((key) => {
-        const schedule = createBookingDto[key];
-        if (
-          schedule &&
-          typeof schedule.weekOfMonth === 'number' &&
-          typeof schedule.dayOfWeek === 'number' &&
-          typeof schedule.time === 'string'
-        ) {
-          return {
-            bookingId: booking.id,
-            ...schedule,
-          };
-        }
-        return null;
-      })
-      .filter(Boolean); // remove nulls
+    //   // console.log(session)
+    //   // await this.subscrptionService.update(sub.id, {
+    //   //   stripeSubscriptionId: String(session.subscription),
+    //   // });
+    //   transactionType = 'subscription';
+    // }
 
-    await this.schedulerService.createMonthSchedules(monthSchedules);
+    //await this.schedulerService.createMonthSchedules(monthSchedules);
     // await this.mailService.sendBookingConfirmationEmail(
     //   user.email,
     //   user.name,
@@ -231,6 +144,175 @@ export class BookingsController {
       },
     );
   }
+  // async create(@Body() createBookingDto: CreateBookingDto) {
+  //   const userData = {
+  //     name: createBookingDto.name,
+  //     email: createBookingDto.email,
+  //     phone: createBookingDto.phone,
+  //     role: 'customer',
+  //   };
+
+  //   const user = await this.usersService.findOrCreateUser(userData);
+  //   const booking = await this.bookingsService.create(
+  //     createBookingDto,
+  //     user.id,
+  //   );
+
+  //   let stripeData = null;
+  //   let transactionType: string;
+  //   let stripeInvoiceId: string | null = null;
+  //   let stripePaymentId: string | null = null;
+
+  //   if (booking.type === 'instant') {
+  //     const customer = await this.stripeService.createCustomer(
+  //       createBookingDto.email,
+  //       createBookingDto.name,
+  //     );
+
+  //     const paymentIntent = await this.stripeService.createPaymentIntent(
+  //       Number(booking.price),
+  //       'usd',
+  //       customer.id,
+  //       {
+  //         bookingId: String(booking.id),
+  //         userId: String(user.id),
+  //       },
+  //     );
+
+  //     stripeData = {
+  //       customerId: customer.id,
+  //       paymentIntent: paymentIntent.id,
+  //       clientSecret: paymentIntent.client_secret,
+  //     };
+
+  //     transactionType = 'instant';
+  //     stripePaymentId = paymentIntent.id;
+  //   } else if (booking.type === 'subscription') {
+  //     const customer = await this.stripeService.createCustomer(
+  //       createBookingDto.email,
+  //       createBookingDto.name,
+  //     );
+
+  //     const product = await this.stripeService.createProduct(
+  //       `Subscription for Booking ${booking.id}`,
+  //     );
+
+  //     const price = await this.stripeService.createPrice(
+  //       product.id,
+  //       Number(booking.price),
+  //       'usd',
+  //       {
+  //         interval: 'month',
+  //         interval_count: 1,
+  //       },
+  //     );
+
+  //     const sub = await this.subscrptionService.createLocalSubscriptionEntity(
+  //       user.id,
+  //       booking.serviceId,
+  //       RecurringType.monthly,
+  //       1,
+  //       new Date(), // current date
+  //       getFirstDayOfNextMonth(), // next billing date
+  //     );
+
+  //     //console.log(sub);
+  //     const session = await this.stripeService.createCheckoutSession({
+  //       customer: customer.id,
+  //       priceId: price.id,
+  //       metadata: {
+  //         bookingId: booking.id.toString(),
+  //         userId: user.id.toString(),
+  //         internalSubId: sub.id,
+  //       },
+  //       successUrl: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+  //       cancelUrl: `${process.env.FRONTEND_URL}/payment-cancel`,
+  //     });
+  //     stripeData = {
+  //       checkoutUrl: session.url,
+  //     };
+  //     // console.log(session)
+  //     // await this.subscrptionService.update(sub.id, {
+  //     //   stripeSubscriptionId: String(session.subscription),
+  //     // });
+  //     transactionType = 'subscription';
+  //   }
+
+  //   // Save transaction
+  //   await this.paymentsService.saveTransaction({
+  //     bookingId: booking.id,
+  //     stripeInvoiceId,
+  //     stripePaymentId,
+  //     amount: Number(booking.price),
+  //     currency: 'usd',
+  //     status: TransactionStatus.pending,
+  //     paymentMethod: 'stripe',
+  //     transactionType,
+  //   });
+  //   // Validate schedule dependencies
+  //   if (booking.subscriptionType) {
+  //     if (
+  //       booking.subscriptionType.name === 'Bi-Weekly Plan' &&
+  //       !createBookingDto.schedule_2
+  //     ) {
+  //       throw new ConflictException('Bi-Weekly Plan requires upto schedule 2');
+  //     }
+
+  //     if (
+  //       booking.subscriptionType.name === 'Weekly Plan' &&
+  //       !createBookingDto.schedule_4
+  //     ) {
+  //       throw new ConflictException('Weekly Plan requires upto schedule 4');
+  //     }
+  //     if (
+  //       booking.subscriptionType.name === 'Monthly Plan' &&
+  //       createBookingDto.schedule_2
+  //     ) {
+  //       throw new ConflictException('Multiple schedules found');
+  //     }
+  //   } else if (createBookingDto.schedule_2) {
+  //     throw new ConflictException('Multiple schedules found');
+  //   }
+  //   const scheduleKeys = [
+  //     'schedule_1',
+  //     'schedule_2',
+  //     'schedule_3',
+  //     'schedule_4',
+  //   ] as const;
+
+  //   const monthSchedules = scheduleKeys
+  //     .map((key) => {
+  //       const schedule = createBookingDto[key];
+  //       if (
+  //         schedule &&
+  //         typeof schedule.weekOfMonth === 'number' &&
+  //         typeof schedule.dayOfWeek === 'number' &&
+  //         typeof schedule.time === 'string'
+  //       ) {
+  //         return {
+  //           bookingId: booking.id,
+  //           ...schedule,
+  //         };
+  //       }
+  //       return null;
+  //     })
+  //     .filter(Boolean); // remove nulls
+
+  //   await this.schedulerService.createMonthSchedules(monthSchedules);
+  //   // await this.mailService.sendBookingConfirmationEmail(
+  //   //   user.email,
+  //   //   user.name,
+  //   //   booking.service.name,
+  //   //   user.address.line_1,
+  //   // );
+  //   return this.responseService.successResponse(
+  //     'Booking successfully saved... proceed to payment',
+  //     {
+  //       booking,
+  //       stripe: stripeData,
+  //     },
+  //   );
+  // }
 
   @Get()
   async findAll(
@@ -293,6 +375,21 @@ export class BookingsController {
       assignStaffDto.staffId,
       req.user.id,
     );
+  }
+
+  @Post(':id/reschedule')
+  @UseGuards(RolesGuard)
+  @Roles('customer')
+  async reschedule(
+    @Param('id') id: string,
+    @Body() rescheduleDto: RescheduleDto,
+    @Request() req,
+  ) {
+    // return this.bookingsService.assignStaff(
+    //   id,
+    //   assignStaffDto.staffId,
+    //   req.user.id,
+    // );
   }
 
   @Post(':id/cancel')

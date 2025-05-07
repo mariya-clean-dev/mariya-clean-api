@@ -49,6 +49,13 @@ export class ServicesController {
     return this.responseService.successResponse('Services List', list);
   }
 
+  @Get('recurring-types')
+  @Public()
+  async findAllRecurringTypes() {
+    const list = await this.servicesService.findAll();
+    return this.responseService.successResponse('Services List', list);
+  }
+
   @Get(':id')
   @Public()
   async findOne(@Param('id') id: string) {

@@ -9,6 +9,8 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import dayjs from 'dayjs';
+import { RescheduleDto } from './dto/reschedule.dto';
 
 function getNextDateFromWeekdayAndWeek(
   weekOfMonth: number,
@@ -219,7 +221,7 @@ export class BookingsService {
       include: {
         customer: {
           select: {
-            id: true,  
+            id: true,
             name: true,
             email: true,
             phone: true,
@@ -351,6 +353,56 @@ export class BookingsService {
 
     return booking;
   }
+
+  // async reschedule(id: string, userId: string, rescheduleDto: RescheduleDto) {
+  //   const booking = await this.prisma.booking.findUnique({
+  //     where: { id },
+  //     include: { monthSchedules: true, schedules: true },
+  //   });
+
+  //   if (!booking) {
+  //     throw new NotFoundException('Booking not found');
+  //   }
+
+  //   // Find upcoming (non-completed, non-cancelled) schedule
+  //   const upcomingSchedule = booking.schedules.find(
+  //     (schedule) =>
+  //       dayjs(schedule.startTime).isAfter(dayjs()) &&
+  //       !['completed', 'cancelled'].includes(schedule.status),
+  //   );
+
+  //   if (!upcomingSchedule) {
+  //     throw new BadRequestException(
+  //       'No upcoming schedule found for this booking',
+  //     );
+  //   }
+
+  //   // Skip the old month schedule so it's not auto-generated again
+  //   await this.prisma.monthSchedule.updateMany({
+  //     where: {
+  //       bookingId: booking.id,
+  //       startTime: upcomingSchedule.startTime,
+  //       isSkipped: false,
+  //     },
+  //     data: {
+  //       isSkipped: true,
+  //     },
+  //   });
+
+  //   // Create a new schedule with the new time
+  //   const newSchedule = await this.prisma.schedule.create({
+  //     data: {
+  //       bookingId: booking.id,
+  //       staffId: rescheduleDto.staffId,
+  //       startTime: new Date(rescheduleDto.startTime),
+  //       endTime: new Date(rescheduleDto.endTime),
+  //       status: 'scheduled',
+  //       createdById: userId,
+  //     },
+  //   });
+
+  //   return newSchedule;
+  // }
 
   async update(
     id: string,

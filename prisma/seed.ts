@@ -126,6 +126,29 @@ async function main() {
     },
   });
 
+    const RecurringType = [
+      {
+        name: 'Weekly',
+        description: 'A recurring weekly plan',
+        dayFrequency: 7, // in days
+        available_discount: 10.0,
+      },
+      {
+        name: 'Bi-Weekly',
+        description: 'A recurring bi-weekly plan',
+        dayFrequency: 14,
+        available_discount: 5.0,
+      },
+    ];
+
+    for (const plan of RecurringType) {
+      await prisma.recurringType.upsert({
+        where: { name: plan.name },
+        update: {},
+        create: plan,
+      });
+    }
+
   const subscriptionPlans = [
     {
       name: 'Weekly Plan',

@@ -113,6 +113,27 @@ export class StripeService {
     });
   }
 
+  async createCardSetupSession({
+    customerId,
+    successUrl,
+    cancelUrl,
+    metadata,
+  }: {
+    customerId: string;
+    successUrl: string;
+    cancelUrl: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Checkout.Session> {
+    return this.stripeClient.checkout.sessions.create({
+      mode: 'setup',
+      customer: customerId,
+      payment_method_types: ['card'],
+      metadata,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+  }
+
   async createCheckoutSession({
     customer,
     priceId,
