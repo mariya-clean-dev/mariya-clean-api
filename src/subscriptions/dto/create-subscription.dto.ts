@@ -7,16 +7,16 @@ import {
   Min,
   IsISO8601,
 } from 'class-validator';
-import { RecurringType } from '@prisma/client';
+import { RecurringTypeEnum } from '@prisma/client';
 
 export class CreateSubscriptionDto {
   @IsString()
   @IsNotEmpty()
   serviceId: string;
 
-  @IsEnum(RecurringType)
+  @IsEnum(RecurringTypeEnum)
   @IsNotEmpty()
-  recurringType: RecurringType;
+  recurringType: RecurringTypeEnum;
 
   @IsString()
   @IsNotEmpty()

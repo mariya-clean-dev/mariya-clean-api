@@ -14,12 +14,12 @@ import {
   ValidateIf,
   Min,
 } from 'class-validator';
-import { ServiceType } from '@prisma/client';
+import { PaymentMethodEnum, ServiceType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class BookingScheduleDto {
-  @IsInt()
-  weekOfMonth: number;
+  // @IsInt()
+  // weekOfMonth: number;
 
   @IsInt()
   dayOfWeek: number;
@@ -72,6 +72,10 @@ export class CreateBookingDto {
   @IsNotEmpty()
   type: ServiceType;
 
+  @IsEnum(PaymentMethodEnum)
+  @IsNotEmpty()
+  paymentMethod: PaymentMethodEnum;
+
   @IsString()
   @IsOptional()
   subscriptionId?: string;
@@ -108,7 +112,11 @@ export class CreateBookingDto {
 
   @IsString()
   @IsOptional()
-  subscriptionTypeId: string;
+  subscriptionTypeId?: string;
+
+  @IsString()
+  @IsOptional()
+  recurringTypeId?: string;
 
   @ValidateNested()
   @Type(() => BookingAddressDto)
@@ -133,20 +141,25 @@ export class CreateBookingDto {
   @ValidateNested()
   @Type(() => BookingScheduleDto)
   @IsNotEmpty()
-  schedule_1: BookingScheduleDto;
+  schedule: BookingScheduleDto;
 
-  @ValidateIf((o) => o.schedule_1)
-  @ValidateNested()
-  @Type(() => BookingScheduleDto)
-  schedule_2?: BookingScheduleDto;
+  // @ValidateNested()
+  // @Type(() => BookingScheduleDto)
+  // @IsNotEmpty()
+  // schedule_1: BookingScheduleDto;
 
-  @ValidateIf((o) => o.schedule_2)
-  @ValidateNested()
-  @Type(() => BookingScheduleDto)
-  schedule_3?: BookingScheduleDto;
+  // @ValidateIf((o) => o.schedule_1)
+  // @ValidateNested()
+  // @Type(() => BookingScheduleDto)
+  // schedule_2?: BookingScheduleDto;
 
-  @ValidateIf((o) => o.schedule_3)
-  @ValidateNested()
-  @Type(() => BookingScheduleDto)
-  schedule_4?: BookingScheduleDto;
+  // @ValidateIf((o) => o.schedule_2)
+  // @ValidateNested()
+  // @Type(() => BookingScheduleDto)
+  // schedule_3?: BookingScheduleDto;
+
+  // @ValidateIf((o) => o.schedule_3)
+  // @ValidateNested()
+  // @Type(() => BookingScheduleDto)
+  // schedule_4?: BookingScheduleDto;
 }

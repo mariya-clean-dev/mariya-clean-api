@@ -19,8 +19,8 @@ enum UserStatus {
 }
 
 enum ServiceType {
-  instant
-  subscription
+  one_time
+  recurring
 }
 
 enum ScheduleStatus {
@@ -65,12 +65,19 @@ enum PriceType {
   per_square_foot
 }
 
-enum RecurringType {
+enum RecurringTypeEnum {
   daily
   weekly
   bi_weekly
   monthly
 }
+
+enum PaymentMethodEnum {
+  online
+  offline
+  subscription
+}
+
 
 enum NotificationType {
   new_assignment
@@ -182,13 +189,28 @@ model Service {
   @@map("services")
 }
 
+model RecurringType {
+  id                 String    @id @default(uuid())
+  name               String    @unique
+  description        String?   @db.Text
+  dayFrequency       Int       @map("day_frequency")
+  available_discount Decimal   @default(0) @db.Decimal(3, 1)
+  bookings           Booking[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("recurring_type")
+}
+
 model Booking {
   id                 String            @id @default(uuid())
   userId             String            @map("user_id")
   type               ServiceType
+  paymentMethod      PaymentMethodEnum @default(online)
   serviceId          String            @map("service_id")
   subscriptionId     String?           @map("subscription_id")
   subscriptionTypeId String?           @map("subscription_type_id")
+  recurringTypeId    String?           @map("recurring_type_id")
   assignedStaffId    String?           @map("assigned_staff_id")
   areaSize           Int               @map("area_size")
   noOfRooms          Int               @default(0) @map("no_of_rooms")
@@ -205,6 +227,7 @@ model Booking {
   service            Service           @relation(fields: [serviceId], references: [id])
   subscription       Subscription?     @relation(fields: [subscriptionId], references: [id])
   subscriptionType   SubscriptionType? @relation(fields: [subscriptionTypeId], references: [id])
+  recurringType      RecurringType?    @relation(fields: [recurringTypeId], references: [id])
   bookingAddress     BookingAddress?
   bookingLogs        BookingLog[]
   transactions       Transaction[]
@@ -220,7 +243,7 @@ model Booking {
 model MonthSchedule {
   id          String   @id @default(uuid())
   bookingId   String   @map("booking_id")
-  weekOfMonth Int      @map("week_of_month")
+  weekOfMonth Int?      @map("week_of_month") //nullable
   dayOfWeek   Int      @map("day_of_week") // 0 (Sunday) - 6 (Saturday)
   time        String   @map("time")
   skip        Boolean  @default(false)
@@ -330,7 +353,7 @@ model Subscription {
   serviceId            String             @map("service_id")
   status               SubscriptionStatus
   stripeSubscriptionId String?            @map("stripe_subscription_id")
-  recurringType        RecurringType      @map("recurring_type")
+  recurringType        RecurringTypeEnum  @map("recurring_type_id")
   recurringFrequency   Int                @map("recurring_frequency")
   startDate            DateTime           @map("start_date")
   endDate              DateTime?          @map("end_date")
@@ -356,6 +379,7 @@ model SubscriptionType {
 
   @@map("subscription_type")
 }
+
 
 model StaffPerformance {
   id                    String   @id @default(uuid())

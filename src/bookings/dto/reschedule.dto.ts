@@ -7,18 +7,8 @@ import {
 } from 'class-validator';
 
 export class RescheduleDto {
-  @IsInt()
-  month: number;
-
-  @IsInt()
-  weekOfMonth: number;
-
-  @IsInt()
-  dayOfWeek: number;
-
-  @IsInt()
-  @IsOptional()
-  year?: number;
+  @IsISO8601()
+  newDate: Date;
 
   @IsString()
   @IsNotEmpty()

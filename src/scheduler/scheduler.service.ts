@@ -13,7 +13,7 @@ import { CreateMonthScheduleDto } from './dto/create-month-schedule.dto';
 import dayjs from 'dayjs';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ScheduleStatus, User } from '@prisma/client';
-import { RescheduleDto } from './dto/reschedule.dto';
+import { RescheduleDto } from '../bookings/dto/reschedule.dto';
 import { Booking } from 'src/bookings/entities/booking.entity';
 import isBetween from 'dayjs/plugin/isBetween';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
@@ -660,86 +660,86 @@ export class SchedulerService {
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + 45);
 
-    await this.generateSchedulesForDate(today, targetDate);
+   // await this.generateSchedulesForDate(today, targetDate);
 
     this.logger.log('Auto-Scheduler completed.');
   }
 
-  async generateSchedulesForDate(
-    startDate: Date,
-    endDate: Date,
-  ): Promise<void> {
-    for (
-      let currentDate = new Date(startDate);
-      currentDate <= new Date(endDate);
-      currentDate.setDate(currentDate.getDate() + 1)
-    ) {
-      const week = getNthWeekdayOfMonth(currentDate);
-      const day = currentDate.getDay();
+  // async generateSchedulesForDate(
+  //   startDate: Date,
+  //   endDate: Date,
+  // ): Promise<void> {
+  //   for (
+  //     let currentDate = new Date(startDate);
+  //     currentDate <= new Date(endDate);
+  //     currentDate.setDate(currentDate.getDate() + 1)
+  //   ) {
+  //     const week = getNthWeekdayOfMonth(currentDate);
+  //     const day = currentDate.getDay();
 
-      // console.log(currentDate, day, week);
+  //     // console.log(currentDate, day, week);
 
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          type: 'subscription',
-          monthSchedules: {
-            some: {
-              weekOfMonth: week,
-              dayOfWeek: day,
-              skip: false,
-            },
-          },
-        },
-        include: { monthSchedules: true, service: true },
-      });
+  //     const bookings = await this.prisma.booking.findMany({
+  //       where: {
+  //         type: 'subscription',
+  //         monthSchedules: {
+  //           some: {
+  //             weekOfMonth: week,
+  //             dayOfWeek: day,
+  //             skip: false,
+  //           },
+  //         },
+  //       },
+  //       include: { monthSchedules: true, service: true },
+  //     });
 
-      for (const booking of bookings) {
-        const schedulesForDay = booking.monthSchedules.filter(
-          (ms: any) =>
-            ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
-        );
-        if (schedulesForDay.length === 0) continue;
+  //     for (const booking of bookings) {
+  //       const schedulesForDay = booking.monthSchedules.filter(
+  //         (ms: any) =>
+  //           ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
+  //       );
+  //       if (schedulesForDay.length === 0) continue;
 
-        const alreadyScheduled = await this.checkIfBookingScheduled(
-          booking.id,
-          currentDate,
-        );
-        if (alreadyScheduled) continue;
+  //       const alreadyScheduled = await this.checkIfBookingScheduled(
+  //         booking.id,
+  //         currentDate,
+  //       );
+  //       if (alreadyScheduled) continue;
 
-        for (const ms of schedulesForDay) {
-          const [hours, minutes] = ms.time.split(':').map(Number);
-          const startDateTime = new Date(currentDate);
-          startDateTime.setHours(hours, minutes, 0);
+  //       for (const ms of schedulesForDay) {
+  //         const [hours, minutes] = ms.time.split(':').map(Number);
+  //         const startDateTime = new Date(currentDate);
+  //         startDateTime.setHours(hours, minutes, 0);
 
-          const durationMins = getDurationFromAreaSize(
-            booking.areaSize,
-            booking.service.durationMinutes,
-          );
-          const endDateTime = new Date(
-            startDateTime.getTime() + durationMins * 60 * 1000,
-          );
+  //         const durationMins = getDurationFromAreaSize(
+  //           booking.areaSize,
+  //           booking.service.durationMinutes,
+  //         );
+  //         const endDateTime = new Date(
+  //           startDateTime.getTime() + durationMins * 60 * 1000,
+  //         );
 
-          const availableStaff = await this.findAvailableStaffSlot(
-            week,
-            day,
-            startDateTime,
-            endDateTime,
-          );
+  //         const availableStaff = await this.findAvailableStaffSlot(
+  //           week,
+  //           day,
+  //           startDateTime,
+  //           endDateTime,
+  //         );
 
-          if (!availableStaff) continue;
+  //         if (!availableStaff) continue;
 
-          await this.saveSchedule({
-            date: formatDate(currentDate),
-            startTime: formatTime(startDateTime),
-            endTime: formatTime(endDateTime),
-            bookingId: booking.id,
-            staffId: availableStaff.id,
-            serviceId: booking.service.id,
-          });
-        }
-      }
-    }
-  }
+  //         await this.saveSchedule({
+  //           date: formatDate(currentDate),
+  //           startTime: formatTime(startDateTime),
+  //           endTime: formatTime(endDateTime),
+  //           bookingId: booking.id,
+  //           staffId: availableStaff.id,
+  //           serviceId: booking.service.id,
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
 
   async generateSchedulesForBooking(
     bookingId: string,

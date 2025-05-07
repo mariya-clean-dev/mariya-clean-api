@@ -1,14 +1,14 @@
 import { IsString, IsOptional, IsEnum, IsNumber, Min } from 'class-validator';
-import { SubscriptionStatus, RecurringType } from '@prisma/client';
+import { SubscriptionStatus, RecurringTypeEnum } from '@prisma/client';
 
 export class UpdateSubscriptionDto {
   @IsEnum(SubscriptionStatus)
   @IsOptional()
   status?: SubscriptionStatus;
 
-  @IsEnum(RecurringType)
+  @IsEnum(RecurringTypeEnum)
   @IsOptional()
-  recurringType?: RecurringType;
+  recurringType?: RecurringTypeEnum;
 
   @IsNumber()
   @IsOptional()
