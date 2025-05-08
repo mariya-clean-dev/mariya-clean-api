@@ -288,13 +288,14 @@ export class SchedulerService {
     });
   }
 
-  async getTimeSlots(
-    weekOfMonth: number,
-    dayOfWeek: number,
-    durationMins: number = 60,
-  ) {
+  async getTimeSlots(dayOfWeek: number, durationMins: number = 60) {
     const today = dayjs().utc().startOf('day');
-    const thirtyDaysLater = today.add(30, 'day');
+
+    // Find the next date with the given dayOfWeek
+    let targetDate = today.clone();
+    while (targetDate.day() !== dayOfWeek) {
+      targetDate = targetDate.add(1, 'day');
+    }
 
     const availableStaffCount = await this.prisma.user.count({
       where: { role: { name: 'staff' } },
@@ -302,11 +303,7 @@ export class SchedulerService {
 
     const unavailableRanges = await this.prisma.staffAvailability.findMany({
       where: {
-        date: {
-          gte: today.toDate(),
-          lte: thirtyDaysLater.toDate(),
-        },
-        weekOfMonth,
+        date: targetDate.toDate(),
         dayOfWeek,
         isAvailable: false,
       },
@@ -317,68 +314,141 @@ export class SchedulerService {
       },
     });
 
-    const matchingDates: dayjs.Dayjs[] = [];
-    let pointer = today.clone();
-
-    while (pointer.isBefore(thirtyDaysLater)) {
-      const currentWeekOfMonth = Math.ceil(pointer.date() / 7);
-      const currentDayOfWeek = pointer.day();
-      if (
-        currentWeekOfMonth === weekOfMonth &&
-        currentDayOfWeek === dayOfWeek
-      ) {
-        matchingDates.push(pointer.clone());
-      }
-      pointer = pointer.add(1, 'day');
-    }
-
     const startHour = 9;
     const endHour = 18;
     const interval = 30;
+
     const slots: { time: string; isAvailable: boolean }[] = [];
 
-    for (const date of matchingDates) {
-      let current = date.clone().utc().hour(startHour).minute(0).second(0);
+    let current = targetDate.clone().utc().hour(startHour).minute(0).second(0);
 
-      while (current.hour() < endHour) {
-        const timeStr = current.format('HH:mm');
-        const serviceEndTime = current.clone().add(durationMins, 'minute');
+    while (current.hour() < endHour) {
+      const timeStr = current.format('HH:mm');
+      const serviceEndTime = current.clone().add(durationMins, 'minute');
 
-        const isUnavailable = unavailableRanges.some((range) => {
-          const sameDay = dayjs(range.date).utc().isSame(current, 'day');
-          if (!sameDay) return false;
+      const isUnavailable = unavailableRanges.some((range) => {
+        const rangeStart = dayjs(range.date)
+          .utc()
+          .hour(dayjs(range.startTime).utc().hour())
+          .minute(dayjs(range.startTime).utc().minute());
 
-          const rangeStart = dayjs(range.date)
-            .utc()
-            .hour(dayjs(range.startTime).utc().hour())
-            .minute(dayjs(range.startTime).utc().minute());
+        const rangeEnd = dayjs(range.date)
+          .utc()
+          .hour(dayjs(range.endTime).utc().hour())
+          .minute(dayjs(range.endTime).utc().minute());
 
-          const rangeEnd = dayjs(range.date)
-            .utc()
-            .hour(dayjs(range.endTime).utc().hour())
-            .minute(dayjs(range.endTime).utc().minute());
+        return (
+          current.isSame(rangeStart) ||
+          (current.isAfter(rangeStart) && current.isBefore(rangeEnd)) ||
+          (serviceEndTime.isAfter(rangeStart) &&
+            (serviceEndTime.isBefore(rangeEnd) ||
+              serviceEndTime.isSame(rangeEnd))) ||
+          (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd))
+        );
+      });
 
-          return (
-            current.isSame(rangeStart) ||
-            (current.isAfter(rangeStart) && current.isBefore(rangeEnd)) ||
-            (serviceEndTime.isAfter(rangeStart) &&
-              (serviceEndTime.isBefore(rangeEnd) ||
-                serviceEndTime.isSame(rangeEnd))) ||
-            (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd))
-          );
-        });
+      slots.push({
+        time: timeStr,
+        isAvailable: availableStaffCount > 0 && !isUnavailable,
+      });
 
-        slots.push({
-          time: timeStr,
-          isAvailable: availableStaffCount > 0 && !isUnavailable,
-        });
-
-        current = current.add(interval, 'minute');
-      }
+      current = current.add(interval, 'minute');
     }
 
     return slots;
   }
+
+  // async getTimeSlots(
+  //   weekOfMonth: number,
+  //   dayOfWeek: number,
+  //   durationMins: number = 60,
+  // ) {
+  //   const today = dayjs().utc().startOf('day');
+  //   const thirtyDaysLater = today.add(30, 'day');
+
+  //   const availableStaffCount = await this.prisma.user.count({
+  //     where: { role: { name: 'staff' } },
+  //   });
+
+  //   const unavailableRanges = await this.prisma.staffAvailability.findMany({
+  //     where: {
+  //       date: {
+  //         gte: today.toDate(),
+  //         lte: thirtyDaysLater.toDate(),
+  //       },
+  //       weekOfMonth,
+  //       dayOfWeek,
+  //       isAvailable: false,
+  //     },
+  //     select: {
+  //       date: true,
+  //       startTime: true,
+  //       endTime: true,
+  //     },
+  //   });
+
+  //   const matchingDates: dayjs.Dayjs[] = [];
+  //   let pointer = today.clone();
+
+  //   while (pointer.isBefore(thirtyDaysLater)) {
+  //     const currentWeekOfMonth = Math.ceil(pointer.date() / 7);
+  //     const currentDayOfWeek = pointer.day();
+  //     if (
+  //       currentWeekOfMonth === weekOfMonth &&
+  //       currentDayOfWeek === dayOfWeek
+  //     ) {
+  //       matchingDates.push(pointer.clone());
+  //     }
+  //     pointer = pointer.add(1, 'day');
+  //   }
+
+  //   const startHour = 9;
+  //   const endHour = 18;
+  //   const interval = 30;
+  //   const slots: { time: string; isAvailable: boolean }[] = [];
+
+  //   for (const date of matchingDates) {
+  //     let current = date.clone().utc().hour(startHour).minute(0).second(0);
+
+  //     while (current.hour() < endHour) {
+  //       const timeStr = current.format('HH:mm');
+  //       const serviceEndTime = current.clone().add(durationMins, 'minute');
+
+  //       const isUnavailable = unavailableRanges.some((range) => {
+  //         const sameDay = dayjs(range.date).utc().isSame(current, 'day');
+  //         if (!sameDay) return false;
+
+  //         const rangeStart = dayjs(range.date)
+  //           .utc()
+  //           .hour(dayjs(range.startTime).utc().hour())
+  //           .minute(dayjs(range.startTime).utc().minute());
+
+  //         const rangeEnd = dayjs(range.date)
+  //           .utc()
+  //           .hour(dayjs(range.endTime).utc().hour())
+  //           .minute(dayjs(range.endTime).utc().minute());
+
+  //         return (
+  //           current.isSame(rangeStart) ||
+  //           (current.isAfter(rangeStart) && current.isBefore(rangeEnd)) ||
+  //           (serviceEndTime.isAfter(rangeStart) &&
+  //             (serviceEndTime.isBefore(rangeEnd) ||
+  //               serviceEndTime.isSame(rangeEnd))) ||
+  //           (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd))
+  //         );
+  //       });
+
+  //       slots.push({
+  //         time: timeStr,
+  //         isAvailable: availableStaffCount > 0 && !isUnavailable,
+  //       });
+
+  //       current = current.add(interval, 'minute');
+  //     }
+  //   }
+
+  //   return slots;
+  // }
 
   async getTimeSlotswithDate(date: Date, durationMins: number = 60) {
     // Convert the input date to a dayjs object and ensure it is treated as UTC
@@ -660,7 +730,7 @@ export class SchedulerService {
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + 45);
 
-   // await this.generateSchedulesForDate(today, targetDate);
+    // await this.generateSchedulesForDate(today, targetDate);
 
     this.logger.log('Auto-Scheduler completed.');
   }

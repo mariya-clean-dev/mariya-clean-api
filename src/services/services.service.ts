@@ -259,27 +259,26 @@ export class ServicesService {
       bathCompount * price_per_bathroom;
 
     // Step 3: Get subscription types
-    const subscriptionTypes = await this.prisma.subscriptionType.findMany();
+    const recurringType = await this.prisma.recurringType.findMany();
 
     // Step 4: Loop through each subscription type and calculate the adjusted price
-    let estimates = subscriptionTypes.map((sub) => {
-      // For example, assume each subscription type has a discountPercent
-      const discountPercent = Number(sub.available_discount || 0); // fallback to 0 if null
-      const planprice = baseCalculatedPrice * Number(sub.recurringFrequency);
-      const discountedPrice = planprice - (planprice * discountPercent) / 100;
+    const estimates = recurringType.map((type) => {
+      const discountPercent = Number(type.available_discount ?? 0);
+      const discountAmount = baseCalculatedPrice * (discountPercent / 100);
+      const finalPrice = Math.max(baseCalculatedPrice - discountAmount, 0);
 
       return {
-        subscriptionTypeId: sub.id,
-        subscriptionName: sub.name,
-        description: sub.description,
+        recurringTypeId: type.id,
+        title: type.name,
+        description: type.description,
         discountPercent,
-        finalPrice: Math.max(discountedPrice, 0), // prevent negative
+        finalPrice,
       };
     });
 
     const onetimeEstimate = {
-      subscriptionTypeId: 'notASubcriptionTypeId',
-      subscriptionName: 'One Time',
+      recurringTypeId: 'notASubcriptionTypeId',
+      title: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
       finalPrice: baseCalculatedPrice, // prevent negative
@@ -292,6 +291,72 @@ export class ServicesService {
       estimates,
     };
   }
+
+  // async getPriceEstimate(
+  //   serviceId: string,
+  //   square_feet: number,
+  //   no_of_rooms: number,
+  //   no_of_bathrooms: number,
+  // ) {
+  //   // Step 1: Get service info
+  //   const service = await this.findOne(serviceId);
+  //   const base_price = Number(service.base_price);
+  //   const price_per_sqft = Number(service.square_foot_price);
+  //   const price_per_room = Number(service.room_rate);
+  //   const price_per_bathroom = Number(service.bathroom_rate);
+
+  //   let roomCompount = no_of_rooms - 1;
+  //   let bathCompount = no_of_bathrooms - 1;
+
+  //   if (no_of_rooms <= 0) {
+  //     roomCompount = 0;
+  //   }
+
+  //   if (no_of_bathrooms <= 0) {
+  //     bathCompount = 0;
+  //   }
+
+  //   // Step 2: Calculate base price (without any subscription adjustments)
+  //   const baseCalculatedPrice =
+  //     base_price +
+  //     ((square_feet - 1000) / 500) * price_per_sqft +
+  //     roomCompount * price_per_room +
+  //     bathCompount * price_per_bathroom;
+
+  //   // Step 3: Get subscription types
+  //   const recurringType = await this.prisma.recurringType.findMany();
+
+  //   // Step 4: Loop through each subscription type and calculate the adjusted price
+  //   let estimates = recurringType.map((sub) => {
+  //     // For example, assume each subscription type has a discountPercent
+  //     const discountPercent = Number(sub.available_discount || 0); // fallback to 0 if null
+  //     const planprice = baseCalculatedPrice * Number(sub.dayFrequency);
+  //     const discountedPrice = planprice - (planprice * discountPercent) / 100;
+
+  //     return {
+  //       subscriptionTypeId: sub.id,
+  //       subscriptionName: sub.name,
+  //       description: sub.description,
+  //       discountPercent,
+  //       finalPrice: Math.max(discountedPrice, 0), // prevent negative
+  //     };
+  //   });
+
+  //   const onetimeEstimate = {
+  //     subscriptionTypeId: 'notASubcriptionTypeId',
+  //     subscriptionName: 'One Time',
+  //     description: 'A Single time Cleaning Service',
+  //     discountPercent: 0,
+  //     finalPrice: baseCalculatedPrice, // prevent negative
+  //   };
+
+  //   estimates.push(onetimeEstimate);
+
+  //   return {
+  //     baseCalculatedPrice,
+  //     estimates,
+  //   };
+  // }
 
   // async getCategories() {
   //   return this.prisma.serviceCategory.findMany();

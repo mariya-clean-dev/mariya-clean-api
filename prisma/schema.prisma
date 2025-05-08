@@ -320,7 +320,7 @@ model StaffAvailability {
   id          String    @id @default(uuid())
   staffId     String    @map("staff_id")
   date        DateTime?
-  weekOfMonth Int       @map("week_of_month")
+  weekOfMonth Int?       @map("week_of_month")
   dayOfWeek   Int       @map("day_of_week")
   startTime   DateTime  @map("start_time") @db.Time
   endTime     DateTime  @map("end_time") @db.Time
