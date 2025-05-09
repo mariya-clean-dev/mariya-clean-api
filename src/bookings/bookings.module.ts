@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -18,10 +18,10 @@ import { MailerModule } from 'src/mailer/mailer.module';
     MailerModule,
     ResponseModule,
     UsersModule,
-    StripeModule,
+    forwardRef(() => StripeModule),
     PaymentsModule,
     SubscriptionsModule,
-    SchedulerModule,
+    forwardRef(() => SchedulerModule),
   ],
   controllers: [BookingsController],
   providers: [BookingsService],

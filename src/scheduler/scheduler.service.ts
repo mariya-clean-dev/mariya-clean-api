@@ -21,6 +21,7 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { compareSync } from 'bcrypt';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
+import { BookingsService } from 'src/bookings/bookings.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -34,7 +35,10 @@ dayjs.extend(isBetween);
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookingService: BookingsService,
+  ) {}
 
   async createSchedule(createScheduleDto: CreateScheduleDto) {
     // Check if staff exists
@@ -581,11 +585,34 @@ export class SchedulerService {
     return schedule;
   }
 
-  async updateSheduleStatus(id: string, status: ScheduleStatus) {
+  async updateSheduleStatus(
+    id: string,
+    status: ScheduleStatus,
+    userId: string,
+    role: string,
+  ) {
+    const scheduleExist = await this.prisma.schedule.findUnique({
+      where: { id },
+      include: { booking: true },
+    });
+    if (!scheduleExist) {
+      throw new NotFoundException('Shedule Not Found');
+    }
     const schedule = await this.prisma.schedule.update({
       where: { id },
       data: { status },
     });
+    if (
+      scheduleExist.booking.type == 'one_time' &&
+      (status == 'canceled' || status == 'completed')
+    ) {
+      await this.bookingService.cancelorComplete(
+        scheduleExist.bookingId,
+        userId,
+        role,
+        status,
+      );
+    }
     return schedule;
   }
 

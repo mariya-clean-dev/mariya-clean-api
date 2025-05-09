@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { StripeService } from './stripe.service';
 import { StripeWebhookController } from './stripe-webhook.controller.ts';
@@ -12,7 +12,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     ConfigModule,
     NotificationsModule,
     MailerModule,
-    SchedulerModule,
+    forwardRef(() => SchedulerModule),
     PaymentsModule,
   ],
   providers: [StripeService],

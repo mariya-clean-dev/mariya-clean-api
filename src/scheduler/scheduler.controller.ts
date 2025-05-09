@@ -266,7 +266,7 @@ export class SchedulerController {
 
   @Patch('schedules/:id/change-status')
   @UseGuards(RolesGuard)
-  // @Roles('admin', 'staff')
+  @Roles('admin', 'staff')
   async updateScheduleStatus(
     @Request() req,
     @Param('id') id: string,
@@ -282,6 +282,8 @@ export class SchedulerController {
     const updated = await this.schedulerService.updateSheduleStatus(
       id,
       updateStatusDto.status,
+      req.user.id,
+      userRole,
     );
     return this.resposneService.successResponse(
       'Schedule updated successfully',

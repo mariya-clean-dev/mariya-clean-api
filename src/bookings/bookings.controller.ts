@@ -368,10 +368,11 @@ export class BookingsController {
 
   @Post(':id/cancel')
   async cancel(@Param('id') id: string, @Request() req) {
-    const data = await this.bookingsService.cancel(
+    const data = await this.bookingsService.cancelorComplete(
       id,
       req.user.id,
       req.user.role,
+      'canceled',
     );
     return this.responseService.successResponse('Booking cancelled', data);
   }
