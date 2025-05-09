@@ -114,6 +114,8 @@ model User {
   status            UserStatus          @default(active)
   password          String?
   otp               String?
+  stripePaymentId   String?             @map("stripe_payment_id")
+  priority          Int?
   otpExpiry         DateTime?           @map("otp_expiry")
   roleId            String              @map("role_id")
   stripeCustomerId  String?             @map("stripe_customer_id") // Added for Stripe

@@ -73,14 +73,14 @@ export class BookingsService {
         `Service with ID ${createBookingDto.serviceId} not found`,
       );
     }
-    let subscriptionType;
-    if (createBookingDto.subscriptionTypeId) {
-      subscriptionType = await this.prisma.subscriptionType.findUnique({
-        where: { id: createBookingDto.subscriptionTypeId },
+    let recurringType;
+    if (createBookingDto.recurringTypeId) {
+      recurringType = await this.prisma.recurringType.findUnique({
+        where: { id: createBookingDto.recurringTypeId },
       });
 
-      if (!subscriptionType) {
-        throw new NotFoundException(`Subscription type not found`);
+      if (!recurringType) {
+        throw new NotFoundException(`plan type not found`);
       }
     }
 
@@ -115,7 +115,6 @@ export class BookingsService {
     delete createBookingDto.address.specialInstructions;
     delete createBookingDto.address.addressLine1;
     delete createBookingDto.address.addressLine2;
-
     const addressData = {
       ...createBookingDto.address,
       ...formattedAddress,
@@ -131,6 +130,7 @@ export class BookingsService {
         noOfRooms: createBookingDto.no_of_rooms,
         noOfBathRooms: createBookingDto.no_of_bathrooms,
         isEco: createBookingDto.isEco || false,
+        paymentMethod: createBookingDto.paymentMethod,
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
         status: BookingStatus.booked,
@@ -138,7 +138,8 @@ export class BookingsService {
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
           : null,
-        subscriptionTypeId: subscriptionType ? subscriptionType.id : null,
+        recurringTypeId: recurringType ? recurringType.id : null,
+        // subscriptionTypeId: subscriptionType ? subscriptionType.id : null,
         bookingAddress: {
           create: {
             address: {
