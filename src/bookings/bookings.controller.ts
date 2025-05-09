@@ -79,9 +79,6 @@ export class BookingsController {
     );
 
     let stripeData = null;
-    let transactionType: string;
-    let stripeInvoiceId: string | null = null;
-    let stripePaymentId: string | null = null;
 
     if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
       const customer = await this.stripeService.createCustomer(
@@ -97,39 +94,16 @@ export class BookingsController {
         checkoutUrl: session.url,
       };
     }
-    // if (booking.type === ServiceType.one_time) {
-    //   const customer = await this.stripeService.createCustomer(
-    //     createBookingDto.email,
-    //     createBookingDto.name,
-    //   );
-    // } else if (booking.type === ServiceType.recurring) {
-    //   const customer = await this.stripeService.createCustomer(
-    //     createBookingDto.email,
-    //     createBookingDto.name,
-    //   );
+    const monthSchedule = {
+      bookingId: booking.id,
+      dayOfWeek: createBookingDto.schedule.dayOfWeek,
+      time: createBookingDto.schedule.time, // Format: 'HH:mm' or similar
+    };
+    await this.schedulerService.createMonthSchedules([monthSchedule]);
+    if (createBookingDto.paymentMethod == PaymentMethodEnum.offline) {
+      await this.schedulerService.generateSchedulesForBooking(booking.id, 15);
+    }
 
-    //   const product = await this.stripeService.createProduct(
-    //     `Subscription for Booking ${booking.id}`,
-    //   );
-
-    //   const price = await this.stripeService.createPrice(
-    //     product.id,
-    //     Number(booking.price),
-    //     'usd',
-    //     {
-    //       interval: 'month',
-    //       interval_count: 1,
-    //     },
-    //   );
-
-    //   // console.log(session)
-    //   // await this.subscrptionService.update(sub.id, {
-    //   //   stripeSubscriptionId: String(session.subscription),
-    //   // });
-    //   transactionType = 'subscription';
-    // }
-
-    //await this.schedulerService.createMonthSchedules(monthSchedules);
     // await this.mailService.sendBookingConfirmationEmail(
     //   user.email,
     //   user.name,

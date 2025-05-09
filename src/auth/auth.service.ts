@@ -135,7 +135,7 @@ export class AuthService {
         otp, // Only include this in development
       };
     }
-
+    await this.mailService.sendOtpEmail(user.email, user.name, otp);
     return { message: 'OTP sent to your email' };
   }
 

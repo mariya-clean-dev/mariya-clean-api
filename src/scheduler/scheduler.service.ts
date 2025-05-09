@@ -710,6 +710,102 @@ export class SchedulerService {
     });
   }
 
+  async rescheduleBookingSchedule(bookingId: string, dto: RescheduleDto) {
+    const { newDate, time } = dto;
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        schedules: true,
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const existingSchedule = await this.prisma.schedule.findFirst({
+      where: {
+        bookingId,
+        startTime: {
+          gt: new Date(), // Future schedule
+        },
+      },
+    });
+
+    if (!existingSchedule) {
+      throw new NotFoundException(
+        'No upcoming schedule found for this booking',
+      );
+    }
+
+    // Combine newDate + time into a datetime
+    const startTime = dayjs(`${newDate}T${time}`).toDate();
+
+    if (!startTime || isNaN(startTime.getTime())) {
+      throw new BadRequestException('Invalid date or time');
+    }
+
+    // Assume same duration as existing schedule
+    const durationMs =
+      new Date(existingSchedule.endTime).getTime() -
+      new Date(existingSchedule.startTime).getTime();
+    const endTime = new Date(startTime.getTime() + durationMs);
+
+    const threeDaysFromNow = dayjs().add(3, 'day');
+    if (dayjs(startTime).isBefore(threeDaysFromNow)) {
+      throw new BadRequestException(
+        'New schedule must be at least 3 days in the future',
+      );
+    }
+
+    // Check staff conflict
+    const hasConflict = await this.prisma.schedule.findFirst({
+      where: {
+        staffId: existingSchedule.staffId,
+        id: { not: existingSchedule.id },
+        OR: [
+          {
+            startTime: { lte: startTime },
+            endTime: { gt: startTime },
+          },
+          {
+            startTime: { lt: endTime },
+            endTime: { gte: endTime },
+          },
+          {
+            startTime: { gte: startTime },
+            endTime: { lte: endTime },
+          },
+        ],
+      },
+    });
+
+    if (hasConflict) {
+      throw new ConflictException('Staff is unavailable at the new time');
+    }
+
+    // Skip or cancel the old schedule
+    await this.prisma.schedule.update({
+      where: { id: existingSchedule.id },
+      data: {
+        status: ScheduleStatus.rescheduled,
+      },
+    });
+
+    // Create new schedule
+    return this.prisma.schedule.create({
+      data: {
+        staffId: existingSchedule.staffId,
+        bookingId,
+        serviceId: existingSchedule.serviceId,
+        startTime,
+        endTime,
+        //actualStartTime: startTime,
+        //actualEndTime: endTime,
+        status: ScheduleStatus.scheduled,
+      },
+    });
+  }
+
   async remove(id: string) {
     // Check if schedule exists
     await this.findOne(id);
@@ -810,10 +906,9 @@ export class SchedulerService {
   //     }
   //   }
   // }
-
   async generateSchedulesForBooking(
     bookingId: string,
-    numberOfDays: number = 30,
+    numberOfDays: number = 7, // Only next 7 days
   ): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -825,7 +920,7 @@ export class SchedulerService {
     }
 
     const today = new Date();
-    let endDate = new Date(today);
+    const endDate = new Date(today);
     endDate.setDate(today.getDate() + numberOfDays);
 
     for (
@@ -833,15 +928,13 @@ export class SchedulerService {
       currentDate <= endDate;
       currentDate.setDate(currentDate.getDate() + 1)
     ) {
-      const week = getNthWeekdayOfMonth(currentDate);
-      const day = currentDate.getDay();
+      const currentDayOfWeek = currentDate.getDay();
 
-      const schedulesForDay = booking.monthSchedules.filter(
-        (ms: any) =>
-          ms.weekOfMonth === week && ms.dayOfWeek === day && !ms.skip,
+      const matchingSchedules = booking.monthSchedules.filter(
+        (ms) => ms.dayOfWeek === currentDayOfWeek && !ms.skip,
       );
 
-      if (schedulesForDay.length === 0) continue;
+      if (matchingSchedules.length === 0) continue;
 
       const alreadyScheduled = await this.checkIfBookingScheduled(
         booking.id,
@@ -849,10 +942,10 @@ export class SchedulerService {
       );
       if (alreadyScheduled) continue;
 
-      for (const ms of schedulesForDay) {
+      for (const ms of matchingSchedules) {
         const [hours, minutes] = ms.time.split(':').map(Number);
         const startDateTime = new Date(currentDate);
-        startDateTime.setHours(hours, minutes, 0);
+        startDateTime.setUTCHours(hours, minutes, 0);
 
         const durationMins = getDurationFromAreaSize(
           booking.areaSize,
@@ -861,16 +954,13 @@ export class SchedulerService {
         const endDateTime = new Date(
           startDateTime.getTime() + durationMins * 60 * 1000,
         );
-
         const availableStaff = await this.findAvailableStaffSlot(
-          week,
-          day,
+          currentDate,
+          currentDayOfWeek,
           startDateTime,
           endDateTime,
         );
-
         if (!availableStaff) continue;
-
         await this.saveSchedule({
           date: formatDate(currentDate),
           startTime: formatTime(startDateTime),
@@ -887,10 +977,10 @@ export class SchedulerService {
 
   async checkIfBookingScheduled(bookingId: string, date: Date) {
     const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
+    startOfDay.setUTCHours(0, 0, 0, 0);
 
     const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    endOfDay.setUTCHours(23, 59, 59, 999);
 
     return await this.prisma.schedule.findFirst({
       where: {
@@ -948,18 +1038,34 @@ export class SchedulerService {
   }
 
   async findAvailableStaffSlot(
-    weekOfMonth: number,
+    date: Date,
     dayOfWeek: number,
     startTime: Date,
     endTime: Date,
   ) {
     const unavailableStaffSlots = await this.prisma.staffAvailability.findMany({
       where: {
-        date: new Date(startTime),
+        date: date,
         dayOfWeek,
-        weekOfMonth,
-        startTime,
-        endTime,
+        isAvailable: false,
+        OR: [
+          {
+            startTime: {
+              lte: endTime,
+            },
+            endTime: {
+              gt: startTime,
+            },
+          },
+          {
+            startTime: {
+              lt: startTime,
+            },
+            endTime: {
+              gte: endTime,
+            },
+          },
+        ],
       },
     });
 

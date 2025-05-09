@@ -289,16 +289,20 @@ export class SchedulerController {
     );
   }
 
-  // @Patch('reschedule/:id')
-  // async reschedule(
-  //   @Param('id') scheduleId: string,
-  //   @Body() rescheduleDto: RescheduleDto,
-  // ) {
-  //   return this.schedulerService.rescheduleAndAssignStaff(
-  //     scheduleId,
-  //     rescheduleDto,
-  //   );
-  // }
+  @Patch('reschedule/:id')
+  async reschedule(
+    @Param('id') scheduleId: string,
+    @Body() rescheduleDto: RescheduleDto,
+  ) {
+    const reshedule = await this.schedulerService.rescheduleBookingSchedule(
+      scheduleId,
+      rescheduleDto,
+    );
+    return this.resposneService.successResponse(
+      'sucessfully resheduled',
+      reshedule,
+    );
+  }
 
   @Delete('schedules/:id')
   @UseGuards(RolesGuard)
