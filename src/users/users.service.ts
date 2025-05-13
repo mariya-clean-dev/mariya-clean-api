@@ -36,6 +36,35 @@ export class UsersService {
       throw new ConflictException('Email already in use');
     }
 
+    if (createUserDto.priority && role.name === 'staff') {
+      const inputPriority = createUserDto.priority;
+
+      // Count current staff members
+      const totalStaff = await this.prisma.user.count({
+        where: { roleId: role.id },
+      });
+
+      // Cap priority to (totalStaff + 1)
+      const finalPriority = Math.min(inputPriority, totalStaff + 1);
+
+      createUserDto.priority = finalPriority;
+
+      // Shift down existing priorities if needed
+      await this.prisma.user.updateMany({
+        where: {
+          roleId: role.id,
+          priority: {
+            gte: finalPriority,
+          },
+        },
+        data: {
+          priority: {
+            increment: 1,
+          },
+        },
+      });
+    }
+
     // Hash password
     let hashedPassword = null;
     if (password) {
