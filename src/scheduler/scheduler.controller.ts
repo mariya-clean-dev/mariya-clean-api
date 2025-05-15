@@ -24,6 +24,7 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import { ResponseService } from 'src/response/response.service';
 import { RescheduleDto } from '../bookings/dto/reschedule.dto';
 import { weeksToDays } from 'date-fns';
+import { start } from 'repl';
 
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
@@ -45,22 +46,27 @@ export class SchedulerController {
     );
   }
 
-  // @Post('auto-schedules')
-  // @UseGuards(RolesGuard)
-  // @Roles('admin')
-  // async autoSchedule(
-  //   @Query('start') startDate: Date,
-  //   @Query('end') endDate: Date,
-  // ) {
-  //   const schedule = await this.schedulerService.generateSchedulesForDate(
-  //     startDate,
-  //     endDate,
-  //   );
-  //   return this.resposneService.successResponse(
-  //     'Auto Schedule created successfully',
-  //     schedule,
-  //   );
-  // }
+  @Post('auto-schedules')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async autoSchedule(
+    @Query('start') startDate: Date,
+    @Query('end') endDate: Date,
+  ) {
+    if (!startDate || !endDate) {
+      startDate = new Date();
+      endDate = new Date(startDate);
+      endDate.setUTCDate(startDate.getUTCDate() + 15);
+    }
+    const schedule = await this.schedulerService.generateSchedulesForDate(
+      startDate,
+      endDate,
+    );
+    return this.resposneService.successResponse(
+      'Auto Schedule created successfully',
+      schedule,
+    );
+  }
 
   @Post('generate-schedules-for-booking/:bookingId')
   async generateSchedulesForBooking(
