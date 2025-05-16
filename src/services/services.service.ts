@@ -233,30 +233,23 @@ export class ServicesService {
     no_of_rooms: number,
     no_of_bathrooms: number,
   ) {
-    // Step 1: Get service info
-    const service = await this.findOne(serviceId);
-    const base_price = Number(service.base_price);
-    const price_per_sqft = Number(service.square_foot_price);
-    const price_per_room = Number(service.room_rate);
-    const price_per_bathroom = Number(service.bathroom_rate);
+  const service = await this.findOne(serviceId);
+  const base_price = Number(service.base_price);
+  const price_per_sqft = Number(service.square_foot_price);
+  const price_per_room = Number(service.room_rate);
+  const price_per_bathroom = Number(service.bathroom_rate);
 
-    let roomCompount = no_of_rooms - 1;
-    let bathCompount = no_of_bathrooms - 1;
+  // Step 2: Normalize counts
+  const roomCount = Math.max(0, no_of_rooms - 1); // First room included
+  const bathCount = Math.max(0, no_of_bathrooms - 1); // First bathroom included
+  const sqftMultiplier = Math.max(0, Math.ceil((square_feet - 1000) / 500)); // First 1000 sqft included
 
-    if (no_of_rooms <= 0) {
-      roomCompount = 0;
-    }
-
-    if (no_of_bathrooms <= 0) {
-      bathCompount = 0;
-    }
-
-    // Step 2: Calculate base price (without any subscription adjustments)
-    const baseCalculatedPrice =
-      base_price +
-      ((square_feet - 1000) / 500) * price_per_sqft +
-      roomCompount * price_per_room +
-      bathCompount * price_per_bathroom;
+  // Step 3: Calculate estimated price
+  const baseCalculatedPrice =
+    base_price +
+    sqftMultiplier * price_per_sqft +
+    roomCount * price_per_room +
+    bathCount * price_per_bathroom;
 
     // Step 3: Get subscription types
     const recurringType = await this.prisma.recurringType.findMany();

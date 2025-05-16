@@ -100,7 +100,7 @@ export class SubscriptionsController {
 
   @Post(':id/cancel')
   @UseGuards(RolesGuard)
-  @Roles('customer')
+  @Roles('customer', 'admin')
   cancel(
     @Param('id') id: string,
     @Body() cancelSubscriptionDto: CancelSubscriptionDto,
