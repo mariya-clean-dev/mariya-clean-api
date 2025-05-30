@@ -219,6 +219,7 @@ model Booking {
   noOfBathRooms      Int               @default(0) @map("no_of_bathrooms")
   propertyType       String?           @map("property_type")
   materialProvided   Boolean           @default(false) @map("material_provided")
+  date               DateTime?
   isEco              Boolean           @map("is_eco")
   status             BookingStatus
   price              Decimal           @db.Decimal(10, 2)
