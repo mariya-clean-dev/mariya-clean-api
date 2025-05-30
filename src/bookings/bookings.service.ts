@@ -89,7 +89,7 @@ export class BookingsService {
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
         status: BookingStatus.booked,
-        date: new Date(createBookingDto.date),
+        date: createBookingDto.date ? new Date(createBookingDto.date) : null,
         price: createBookingDto.price,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId

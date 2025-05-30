@@ -814,19 +814,26 @@ export class SchedulerService {
 
     // One-time booking flow
     if (isOneTime && specificDate) {
+      const specificDateObj = new Date(specificDate);
+
+      if (isNaN(specificDateObj.getTime())) {
+        throw new Error(`Invalid specificDate provided: ${specificDate}`);
+      }
+
       const alreadyScheduled = await this.checkIfBookingScheduled(
         booking.id,
-        specificDate,
+        specificDateObj,
       );
       if (alreadyScheduled) return;
 
-      const [hours, minutes] = specificDate
+      const [hours, minutes] = specificDateObj
         .toTimeString()
         .slice(0, 5)
         .split(':')
         .map(Number);
-      const startDateTime = new Date(specificDate);
-      startDateTime.setUTCHours(hours || 9, minutes || 0, 0); // fallback to 9:00 AM
+
+      const startDateTime = new Date(specificDateObj);
+      startDateTime.setUTCHours(hours || 9, minutes || 0, 0);
 
       const durationMins = getDurationFromAreaSize(
         booking.areaSize,
@@ -837,15 +844,15 @@ export class SchedulerService {
       );
 
       const availableStaff = await this.findAvailableStaffSlot(
-        specificDate,
-        specificDate.getDay(),
+        specificDateObj,
+        specificDateObj.getDay(),
         startDateTime,
         endDateTime,
       );
       if (!availableStaff) return;
 
       await this.saveSchedule({
-        date: formatDate(specificDate),
+        date: formatDate(specificDateObj),
         startTime: formatTime(startDateTime),
         endTime: formatTime(endDateTime),
         bookingId: booking.id,
@@ -853,7 +860,7 @@ export class SchedulerService {
         serviceId: booking.service.id,
       });
 
-      return; // Done for one-time
+      return;
     }
 
     // Recurring booking flow
@@ -861,16 +868,19 @@ export class SchedulerService {
     const endDate = new Date(today);
     endDate.setDate(today.getDate() + numberOfDays);
 
-    for (
-      let currentDate = new Date(today);
-      currentDate <= endDate;
-      currentDate.setDate(currentDate.getDate() + 1)
-    ) {
+    for (let i = 0; i <= numberOfDays; i++) {
+      const currentDate = new Date(today);
+      currentDate.setDate(today.getDate() + i);
       const currentDayOfWeek = currentDate.getDay();
+      const currentWeekOfMonth = Math.ceil(currentDate.getDate() / 7);
 
       const matchingSchedules = booking.monthSchedules.filter(
-        (ms) => ms.dayOfWeek === currentDayOfWeek && !ms.skip,
+        (ms) =>
+          ms.dayOfWeek === currentDayOfWeek &&
+          (!ms.weekOfMonth || ms.weekOfMonth === currentWeekOfMonth) &&
+          !ms.skip,
       );
+
       if (matchingSchedules.length === 0) continue;
 
       const alreadyScheduled = await this.checkIfBookingScheduled(
@@ -879,36 +889,38 @@ export class SchedulerService {
       );
       if (alreadyScheduled) continue;
 
-      for (const ms of matchingSchedules) {
-        const [hours, minutes] = ms.time.split(':').map(Number);
-        const startDateTime = new Date(currentDate);
-        startDateTime.setUTCHours(hours, minutes, 0);
+      await Promise.all(
+        matchingSchedules.map(async (ms) => {
+          const [hours, minutes] = ms.time.split(':').map(Number);
+          const startDateTime = new Date(currentDate);
+          startDateTime.setUTCHours(hours, minutes, 0);
 
-        const durationMins = getDurationFromAreaSize(
-          booking.areaSize,
-          booking.service.durationMinutes,
-        );
-        const endDateTime = new Date(
-          startDateTime.getTime() + durationMins * 60 * 1000,
-        );
+          const durationMins = getDurationFromAreaSize(
+            booking.areaSize,
+            booking.service.durationMinutes,
+          );
+          const endDateTime = new Date(
+            startDateTime.getTime() + durationMins * 60 * 1000,
+          );
 
-        const availableStaff = await this.findAvailableStaffSlot(
-          currentDate,
-          currentDayOfWeek,
-          startDateTime,
-          endDateTime,
-        );
-        if (!availableStaff) continue;
+          const availableStaff = await this.findAvailableStaffSlot(
+            currentDate,
+            currentDayOfWeek,
+            startDateTime,
+            endDateTime,
+          );
+          if (!availableStaff) return;
 
-        await this.saveSchedule({
-          date: formatDate(currentDate),
-          startTime: formatTime(startDateTime),
-          endTime: formatTime(endDateTime),
-          bookingId: booking.id,
-          staffId: availableStaff.id,
-          serviceId: booking.service.id,
-        });
-      }
+          await this.saveSchedule({
+            date: formatDate(currentDate),
+            startTime: formatTime(startDateTime),
+            endTime: formatTime(endDateTime),
+            bookingId: booking.id,
+            staffId: availableStaff.id,
+            serviceId: booking.service.id,
+          });
+        }),
+      );
     }
   }
 
@@ -930,7 +942,7 @@ export class SchedulerService {
         },
       },
     });
-  }   
+  }
 
   async saveSchedule(params: {
     date: string;
@@ -1048,7 +1060,7 @@ export function formatDate(date: Date): string {
 export function formatTime(date: Date): string {
   return date.toTimeString().split(' ')[0];
 }
- 
+
 export function getDurationFromAreaSize(
   area: number,
   durationMinutes: number,
