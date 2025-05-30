@@ -34,17 +34,7 @@ export class SchedulerController {
     private readonly resposneService: ResponseService,
   ) {}
 
-  @Post('schedules')
-  @UseGuards(RolesGuard)
-  @Roles('admin')
-  async createSchedule(@Body() createScheduleDto: CreateScheduleDto) {
-    const schedule =
-      await this.schedulerService.createSchedule(createScheduleDto);
-    return this.resposneService.successResponse(
-      'Schedule created successfully',
-      schedule,
-    );
-  }
+
 
   @Post('auto-schedules')
   @UseGuards(RolesGuard)
@@ -94,19 +84,6 @@ export class SchedulerController {
     }
   }
 
-  @Get('available-staff')
-  async getAvailableStaffs(
-    @Query('start') start: string,
-    @Query('end') end: string,
-  ) {
-    const startTime = new Date(start);
-    const endTime = new Date(end);
-    const data = await this.schedulerService.getAvailableStaffs(
-      startTime,
-      endTime,
-    );
-    return this.resposneService.successResponse('Available staffs', data);
-  }
 
   @Get('schedules')
   @Roles('admin', 'staff')
@@ -136,22 +113,6 @@ export class SchedulerController {
     return this.resposneService.successResponse(
       'Schedules retrieved successfully',
       schedules,
-    );
-  }
-
-  @Get('month-schedules')
-  @Public()
-  async getMonthSchedules(
-    @Query('startDate') startDate?: Date,
-    @Query('endDate') endDate?: Date,
-  ) {
-    const monthSchedule = await this.schedulerService.findMonthSchedules(
-      startDate,
-      endDate,
-    );
-    return this.resposneService.successResponse(
-      'Month schedule list',
-      monthSchedule,
     );
   }
 

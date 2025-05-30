@@ -66,7 +66,6 @@ export class BookingsService {
       line_1: createBookingDto.address.addressLine1,
       line_2: createBookingDto.address.addressLine2,
     };
-
     const specialInstructions = createBookingDto.address.specialInstructions;
 
     delete createBookingDto.address.specialInstructions;
@@ -76,7 +75,6 @@ export class BookingsService {
       ...createBookingDto.address,
       ...formattedAddress,
     };
-
     // Create booking
     const booking = await this.prisma.booking.create({
       data: {
@@ -91,6 +89,7 @@ export class BookingsService {
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
         status: BookingStatus.booked,
+        date: new Date(createBookingDto.date),
         price: createBookingDto.price,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
@@ -117,7 +116,11 @@ export class BookingsService {
         },
       },
       include: {
-        bookingAddress: true,
+        bookingAddress: {
+          include: {
+            address: true,
+          },
+        },
         service: true,
         subscriptionType: true,
       },

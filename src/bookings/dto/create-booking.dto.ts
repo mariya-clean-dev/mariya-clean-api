@@ -80,6 +80,10 @@ export class CreateBookingDto {
   @IsOptional()
   subscriptionId?: string;
 
+  @IsISO8601()
+  @IsOptional()
+  date?: Date;
+
   @IsNumber()
   @IsNotEmpty()
   areaSize: number;
@@ -140,8 +144,8 @@ export class CreateBookingDto {
 
   @ValidateNested()
   @Type(() => BookingScheduleDto)
-  @IsNotEmpty()
-  schedule: BookingScheduleDto;
+  @IsOptional()
+  schedule?: BookingScheduleDto;
 
   // @ValidateNested()
   // @Type(() => BookingScheduleDto)

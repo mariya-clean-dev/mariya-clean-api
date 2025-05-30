@@ -40,125 +40,6 @@ export class SchedulerService {
     private readonly bookingService: BookingsService,
   ) {}
 
-  async createSchedule(createScheduleDto: CreateScheduleDto) {
-    // Check if staff exists
-    const staff = await this.prisma.user.findFirst({
-      where: {
-        id: createScheduleDto.staffId,
-        role: {
-          name: 'staff',
-        },
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException(
-        `Staff with ID ${createScheduleDto.staffId} not found`,
-      );
-    }
-
-    // If booking ID is provided, check if it exists
-    if (createScheduleDto.bookingId) {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: createScheduleDto.bookingId },
-      });
-
-      if (!booking) {
-        throw new NotFoundException(
-          `Booking with ID ${createScheduleDto.bookingId} not found`,
-        );
-      }
-    }
-
-    // Parse dates
-    const startTime = new Date(createScheduleDto.startTime);
-    const endTime = new Date(createScheduleDto.endTime);
-    const actualStartTime = new Date(createScheduleDto.startTime);
-    const actualEndTime = new Date(createScheduleDto.endTime);
-    // Validate time range
-    if (endTime <= startTime) {
-      throw new BadRequestException('End time must be after start time');
-    }
-
-    // Check for schedule conflicts
-    const conflictingSchedule = await this.prisma.schedule.findFirst({
-      where: {
-        staffId: createScheduleDto.staffId,
-        OR: [
-          // New schedule starts during existing schedule
-          {
-            startTime: { lte: startTime },
-            endTime: { gt: startTime },
-          },
-          // New schedule ends during existing schedule
-          {
-            startTime: { lt: endTime },
-            endTime: { gte: endTime },
-          },
-          // New schedule entirely contains existing schedule
-          {
-            startTime: { gte: startTime },
-            endTime: { lte: endTime },
-          },
-        ],
-      },
-    });
-
-    if (conflictingSchedule) {
-      throw new BadRequestException(
-        'Schedule conflicts with an existing schedule',
-      );
-    }
-
-    // Create schedule
-    return this.prisma.schedule.create({
-      data: {
-        staff: {
-          connect: { id: createScheduleDto.staffId },
-        },
-        booking: {
-          connect: { id: createScheduleDto.bookingId },
-        },
-        service: {
-          connect: { id: createScheduleDto.serviceId },
-        },
-        status: createScheduleDto.status || ScheduleStatus.scheduled,
-        startTime,
-        endTime,
-        actualStartTime,
-        actualEndTime,
-      },
-    });
-  }
-
-  async getAvailableStaffs(start: Date, end: Date): Promise<User[]> {
-    const staffList = await this.prisma.user.findMany({
-      where: {
-        role: {
-          name: 'staff',
-        },
-      },
-    });
-
-    const available: User[] = [];
-
-    for (const staff of staffList) {
-      const hasConflict = await this.prisma.schedule.findFirst({
-        where: {
-          staffId: staff.id,
-          startTime: { lt: end },
-          endTime: { gt: start },
-        },
-      });
-
-      if (!hasConflict) {
-        available.push(staff);
-      }
-    }
-
-    return available;
-  }
-
   async findAvailableStaff(date: Date) {
     const allStaff = await this.prisma.user.findMany({
       where: { role: { name: 'staff' } },
@@ -274,22 +155,6 @@ export class SchedulerService {
         totalPages: Math.ceil(total / limit),
       },
     };
-  }
-
-  async findMonthSchedules(startDate: Date, endDate: Date) {
-    let where: any;
-    if (startDate || endDate) {
-      where.startTime = {};
-      if (startDate) {
-        where.startTime.gte = startDate;
-      }
-      if (endDate) {
-        where.startTime.lte = endDate;
-      }
-    }
-    return this.prisma.monthSchedule.findMany({
-      where,
-    });
   }
 
   async getTimeSlots(dayOfWeek: number, durationMins: number = 60) {
@@ -853,7 +718,7 @@ export class SchedulerService {
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + 45);
 
-    // await this.generateSchedulesForDate(today, targetDate);
+    await this.generateSchedulesForDate(today, targetDate);
 
     this.logger.log('Auto-Scheduler completed.');
   }
@@ -933,7 +798,8 @@ export class SchedulerService {
 
   async generateSchedulesForBooking(
     bookingId: string,
-    numberOfDays: number = 7, // Only next 7 days
+    numberOfDays: number = 7,
+    specificDate?: Date, // Optional override for one-time bookings
   ): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -944,6 +810,53 @@ export class SchedulerService {
       throw new Error(`Booking with ID ${bookingId} not found.`);
     }
 
+    const isOneTime = booking.type === 'one_time';
+
+    // One-time booking flow
+    if (isOneTime && specificDate) {
+      const alreadyScheduled = await this.checkIfBookingScheduled(
+        booking.id,
+        specificDate,
+      );
+      if (alreadyScheduled) return;
+
+      const [hours, minutes] = specificDate
+        .toTimeString()
+        .slice(0, 5)
+        .split(':')
+        .map(Number);
+      const startDateTime = new Date(specificDate);
+      startDateTime.setUTCHours(hours || 9, minutes || 0, 0); // fallback to 9:00 AM
+
+      const durationMins = getDurationFromAreaSize(
+        booking.areaSize,
+        booking.service.durationMinutes,
+      );
+      const endDateTime = new Date(
+        startDateTime.getTime() + durationMins * 60 * 1000,
+      );
+
+      const availableStaff = await this.findAvailableStaffSlot(
+        specificDate,
+        specificDate.getDay(),
+        startDateTime,
+        endDateTime,
+      );
+      if (!availableStaff) return;
+
+      await this.saveSchedule({
+        date: formatDate(specificDate),
+        startTime: formatTime(startDateTime),
+        endTime: formatTime(endDateTime),
+        bookingId: booking.id,
+        staffId: availableStaff.id,
+        serviceId: booking.service.id,
+      });
+
+      return; // Done for one-time
+    }
+
+    // Recurring booking flow
     const today = new Date();
     const endDate = new Date(today);
     endDate.setDate(today.getDate() + numberOfDays);
@@ -958,7 +871,6 @@ export class SchedulerService {
       const matchingSchedules = booking.monthSchedules.filter(
         (ms) => ms.dayOfWeek === currentDayOfWeek && !ms.skip,
       );
-
       if (matchingSchedules.length === 0) continue;
 
       const alreadyScheduled = await this.checkIfBookingScheduled(
@@ -979,6 +891,7 @@ export class SchedulerService {
         const endDateTime = new Date(
           startDateTime.getTime() + durationMins * 60 * 1000,
         );
+
         const availableStaff = await this.findAvailableStaffSlot(
           currentDate,
           currentDayOfWeek,
@@ -986,6 +899,7 @@ export class SchedulerService {
           endDateTime,
         );
         if (!availableStaff) continue;
+
         await this.saveSchedule({
           date: formatDate(currentDate),
           startTime: formatTime(startDateTime),
@@ -1016,7 +930,7 @@ export class SchedulerService {
         },
       },
     });
-  }
+  }   
 
   async saveSchedule(params: {
     date: string;
@@ -1114,28 +1028,6 @@ export class SchedulerService {
   }
 }
 
-export function getWeekOfMonth(date: Date): number {
-  const adjustedDate =
-    date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  return Math.ceil(adjustedDate / 7);
-}
-
-export function getOrdinalWeekdayOfMonth(date: Date): number {
-  const target = dayjs(date);
-  const startOfMonth = target.startOf('month');
-
-  let count = 0;
-
-  for (let i = 0; i < target.date(); i++) {
-    const current = startOfMonth.add(i, 'day');
-    if (current.day() === target.day()) {
-      count++;
-    }
-  }
-
-  return count; // returns 0-based ordinal, so 0 = 1st, 1 = 2nd...
-}
-
 export function getNthWeekdayOfMonth(date: Date): number {
   const day = date.getDay(); // 0 (Sun) - 6 (Sat)
   const d = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -1156,24 +1048,11 @@ export function formatDate(date: Date): string {
 export function formatTime(date: Date): string {
   return date.toTimeString().split(' ')[0];
 }
-
+ 
 export function getDurationFromAreaSize(
   area: number,
   durationMinutes: number,
 ): number {
   const buffer = Number(60);
   return buffer + 60 + Math.ceil((area - 1000) / 500) * durationMinutes;
-}
-
-export function get30MinIntervals(
-  startTime: Date,
-  durationMins: number,
-): string[] {
-  const slots: string[] = [];
-  let time = new Date(startTime);
-  for (let i = 0; i < durationMins; i += 30) {
-    slots.push(formatTime(time));
-    time.setMinutes(time.getMinutes() + 30);
-  }
-  return slots;
 }
