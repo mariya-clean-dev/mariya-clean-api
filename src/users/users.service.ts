@@ -177,10 +177,23 @@ export class UsersService {
         data.email,
         data.name,
       );
-
-      user = await this.create({
-        ...data,
-        stripe_customer_id: stripeCustomer.id, 
+      console.log(stripeCustomer);
+      const user = await this.prisma.user.create({
+        data: {
+          name: 'Sabarinath Prasad',
+          email: 'sabarinath5604@gmail.com',
+          phone: '7594092293',
+          stripeCustomerId: stripeCustomer.id,
+          role: {
+            connect: {
+              id: 'aeeeb88e-14cc-401a-b578-c437b5ec370e',
+            },
+          },
+          password: null,
+        },
+        include: {
+          role: true,
+        },
       });
     }
     return user;
