@@ -134,6 +134,22 @@ export class StripeService {
     });
   }
 
+  async chargeSavedCard(params: {
+    customerId: string;
+    amount: number; // in cents
+    currency: string;
+    paymentMethodId: string;
+  }) {
+    return await this.stripeClient.paymentIntents.create({
+      amount: params.amount,
+      currency: params.currency,
+      customer: params.customerId,
+      payment_method: params.paymentMethodId,
+      off_session: true,
+      confirm: true,
+    });
+  }
+
   async createCheckoutSession({
     customer,
     priceId,

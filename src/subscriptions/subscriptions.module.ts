@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -11,7 +11,7 @@ import { ResponseModule } from 'src/response/response.module';
   imports: [
     PrismaModule,
     NotificationsModule,
-    StripeModule,
+    forwardRef(() => StripeModule),
     PaymentsModule,
     ResponseModule,
   ],

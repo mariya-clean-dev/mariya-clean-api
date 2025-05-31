@@ -281,8 +281,8 @@ export class StripeWebhookController {
     const customerEmail = session.customer_details.email;
     const internalSubId = session.metadata?.internalSubId;
 
-    //    console.log(session);
     if (internalSubId) {
+      // Activate internal subscription
       await this.prisma.subscription.update({
         where: { id: internalSubId },
         data: {
@@ -303,12 +303,37 @@ export class StripeWebhookController {
         },
       });
 
+      if (!booking) {
+        throw new Error('Booking not found after payment.');
+      }
+
+      // Mark payment as successful
       await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
-        stripeSubscriptionId: session.subscription.toString(),
+        stripeSubscriptionId: subscriptionId.toString(),
       });
 
-      await this.shedulerService.generateSchedulesForBooking(booking.id);
+      // Generate schedules based on booking type
+      if (booking.type === 'recurring') {
+        await this.shedulerService.generateSchedulesForBooking(booking.id);
+      } else if (booking.type === 'one_time') {
+        // Extract date/time from metadata or booking table (adjust if needed)
+        const date = session.metadata.date; // e.g. '2025-06-01'
+        const time = session.metadata.time; // e.g. '14:30'
 
+        if (!date || !time) {
+          throw new Error(
+            'Date and time are required for one-time booking schedule.',
+          );
+        }
+
+        await this.shedulerService.generateOneTimeScheduleForBooking(
+          booking.id,
+          date,
+          time,
+        );
+      }
+
+      // Send booking confirmation
       await this.mailService.sendBookingConfirmationEmail(
         booking.customer.email,
         booking.customer.name,
@@ -316,6 +341,7 @@ export class StripeWebhookController {
         booking.bookingAddress.address.line_1,
       );
 
+      // Send notification
       await this.notificationsService.createNotification({
         userId: session.metadata.userId,
         title: 'Subscription Activated',
