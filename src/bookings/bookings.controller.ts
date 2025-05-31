@@ -119,10 +119,10 @@ export class BookingsController {
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
         // Generate single schedule for one-time booking
 
-        await this.schedulerService.generateSchedulesForBooking(
+        await this.schedulerService.generateOneTimeScheduleForBooking(
           booking.id,
-          7,
           createBookingDto.date,
+          createBookingDto.time,
         );
       }
     } else if (createBookingDto.type === ServiceType.recurring) {
