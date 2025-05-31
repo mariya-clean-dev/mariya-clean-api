@@ -180,7 +180,7 @@ export class UsersService {
 
       user = await this.create({
         ...data,
-        stripe_customer_id: stripeCustomer.id, // ✅ use the correct field name
+        stripe_customer_id: stripeCustomer.id, 
       });
     }
     return user;
