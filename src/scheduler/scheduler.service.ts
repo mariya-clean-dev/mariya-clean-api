@@ -796,6 +796,51 @@ export class SchedulerService {
     }
   }
 
+  async generateOneTimeScheduleForBooking(
+    bookingId: string,
+    date: Date,
+    time: string,
+  ): Promise<void> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { service: true },
+    });
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    const [hours, minutes] = time.split(':').map(Number);
+    const startDate = new Date(date);
+    startDate.setHours(hours, minutes, 0, 0);
+
+    const duration = booking.service?.durationMinutes || 120;
+    const endDate = dayjs(startDate).add(duration, 'minute').toDate();
+
+    const staff = await this.prisma.user.findFirst({
+      where: {
+        role: {
+          name: 'staff', // Ensure your Prisma schema supports filtering this way (or adjust if needed)
+        },
+      },
+    });
+
+    if (!staff) {
+      throw new Error('No staff found');
+    }
+
+    await this.prisma.schedule.create({
+      data: {
+        bookingId: booking.id,
+        staffId: staff.id,
+        serviceId: booking.serviceId,
+        startTime: startDate,
+        endTime: endDate,
+        status: ScheduleStatus.scheduled,
+      },
+    });
+  }
+
   async generateSchedulesForBooking(
     bookingId: string,
     numberOfDays: number = 7,

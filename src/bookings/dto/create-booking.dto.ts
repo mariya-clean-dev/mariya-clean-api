@@ -80,9 +80,15 @@ export class CreateBookingDto {
   @IsOptional()
   subscriptionId?: string;
 
+  @ValidateIf((o) => o.type === ServiceType.one_time)
   @IsISO8601()
-  @IsOptional()
+  @IsNotEmpty()
   date?: Date;
+
+  @ValidateIf((o) => o.type === ServiceType.one_time)
+  @IsString()
+  @IsNotEmpty()
+  time?: string;
 
   @IsNumber()
   @IsNotEmpty()
