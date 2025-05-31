@@ -74,28 +74,31 @@ export class BookingsController {
 
     const user = await this.usersService.findOrCreateUser(userData);
 
-    // If one-time booking, ensure date is provided
+    // Validation
     if (
       createBookingDto.type === ServiceType.one_time &&
       !createBookingDto.date
     ) {
       throw new BadRequestException('date is required for one-time bookings.');
-    } else if (
+    }
+
+    if (
       createBookingDto.type === ServiceType.recurring &&
       !createBookingDto.schedule
     ) {
       throw new BadRequestException(
-        'shedule is required for reccuring bookings.',
+        'schedule is required for recurring bookings.',
       );
     }
 
+    // Create Booking
     const booking = await this.bookingsService.create(
       createBookingDto,
       user.id,
     );
 
+    // Stripe payment setup if required
     let stripeData = null;
-
     if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
       const customer = await this.stripeService.createCustomer(
         createBookingDto.email,
@@ -104,18 +107,26 @@ export class BookingsController {
 
       const session = await this.stripeService.createCardSetupSession({
         customerId: customer.id,
-        successUrl: `${process.env.FRONTEND_URL}/payment-method/success`,
-        cancelUrl: `${process.env.FRONTEND_URL}/payment-method/cancel`,
+        successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
+        cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
       });
 
-      stripeData = {
-        checkoutUrl: session.url,
-      };
+      stripeData = { checkoutUrl: session.url };
     }
 
-    // === Booking type-specific logic ===
-    if (createBookingDto.type === ServiceType.recurring) {
-      // Create MonthSchedule entry
+    // Booking type-specific logic
+    if (createBookingDto.type === ServiceType.one_time) {
+      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
+        // Generate single schedule for one-time booking
+
+        await this.schedulerService.generateSchedulesForBooking(
+          booking.id,
+          7,
+          createBookingDto.date,
+        );
+      }
+    } else if (createBookingDto.type === ServiceType.recurring) {
+      // Create MonthSchedule
       const monthSchedule = {
         bookingId: booking.id,
         dayOfWeek: createBookingDto.schedule.dayOfWeek,
@@ -124,13 +135,11 @@ export class BookingsController {
 
       await this.schedulerService.createMonthSchedules([monthSchedule]);
 
-      // Generate first 15 days of schedules if offline payment
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
-        await this.schedulerService.generateSchedulesForBooking(booking.id, 15);
+        // Generate 2 months of schedules immediately
+        await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
       }
     }
-
-    // No scheduling needed for one-time booking — only `booking.date` is saved in DB
 
     await this.mailService.sendBookingConfirmationEmail(
       user.email,
