@@ -6,6 +6,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { MailerModule } from 'src/mailer/mailer.module';
 import { SchedulerModule } from 'src/scheduler/scheduler.module';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { BookingsModule } from 'src/bookings/bookings.module'; // ✅ Add this
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     NotificationsModule,
     MailerModule,
     forwardRef(() => SchedulerModule),
+    forwardRef(() => BookingsModule), 
     PaymentsModule,
   ],
   providers: [StripeService],

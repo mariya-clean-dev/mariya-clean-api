@@ -464,6 +464,9 @@ export class AnalyticsService {
       throw new BadRequestException('Invalid "startDate" or "endDate"');
     }
 
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+
     const [totalClients, totalEarningsData, totalStaff] = await Promise.all([
       this.prisma.user.count({
         where: {
@@ -476,10 +479,15 @@ export class AnalyticsService {
       }),
       this.prisma.booking.aggregate({
         where: {
-          status: BookingStatus.booked,
-          createdAt: { gte: fromDate, lte: toDate },
+         // status: BookingStatus.booked, // optionally use: { in: [...] }
+          createdAt: {
+            gte: fromDate,
+            lte: toDate,
+          },
         },
-        _sum: { price: true },
+        _sum: {
+          price: true,
+        },
       }),
       this.prisma.user.count({
         where: {

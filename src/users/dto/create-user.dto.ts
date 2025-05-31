@@ -26,4 +26,7 @@ export class CreateUserDto {
   @IsEnum(UserStatus)
   @IsOptional()
   status?: UserStatus = UserStatus.active;
+
+  @IsOptional()
+  stripe_customer_id?: string
 }

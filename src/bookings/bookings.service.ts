@@ -269,6 +269,15 @@ export class BookingsService {
             address: true,
           },
         },
+        recurringType: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            dayFrequency: true,
+            available_discount: true,
+          },
+        },
         service: true,
         // bookingLogs: {
         //   include: {

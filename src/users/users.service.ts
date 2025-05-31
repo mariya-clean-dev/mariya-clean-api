@@ -8,10 +8,14 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import { StripeService } from 'src/stripe/stripe.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stripeService: StripeService,
+  ) {}
 
   async create(createUserDto: CreateUserDto) {
     const { email, password } = createUserDto;
@@ -168,7 +172,16 @@ export class UsersService {
   }) {
     let user: any = await this.findByEmail(data.email);
     if (!user) {
-      user = await this.create(data);
+      // create Stripe customer first
+      const stripeCustomer = await this.stripeService.createCustomer(
+        data.email,
+        data.name,
+      );
+
+      user = await this.create({
+        ...data,
+        stripe_customer_id: stripeCustomer.id, // save Stripe customer ID here
+      });
     }
     return user;
   }

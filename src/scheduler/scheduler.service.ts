@@ -5,6 +5,7 @@ import {
   Logger,
   ConflictException,
 } from '@nestjs/common';
+import { Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { UpdateScheduleDto } from './dto/update-scheduler.dto';
@@ -22,6 +23,8 @@ import { compareSync } from 'bcrypt';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { BookingsService } from 'src/bookings/bookings.service';
+import { PaymentsService } from 'src/payments/payments.service';
+import { StripeService } from 'src/stripe/stripe.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -38,6 +41,8 @@ export class SchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingService: BookingsService,
+    private readonly stripeService: StripeService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async findAvailableStaff(date: Date) {
@@ -458,27 +463,91 @@ export class SchedulerService {
   ) {
     const scheduleExist = await this.prisma.schedule.findUnique({
       where: { id },
-      include: { booking: true },
+      include: {
+        booking: {
+          include: {
+            customer: true,
+            service: true,
+          },
+        },
+      },
     });
+
     if (!scheduleExist) {
-      throw new NotFoundException('Shedule Not Found');
+      throw new NotFoundException('Schedule not found');
     }
-    const schedule = await this.prisma.schedule.update({
+
+    const updatedSchedule = await this.prisma.schedule.update({
       where: { id },
       data: { status },
     });
-    if (
-      scheduleExist.booking.type == 'one_time' &&
-      (status == 'canceled' || status == 'completed')
-    ) {
+
+    const booking = scheduleExist.booking;
+    if (!booking) return updatedSchedule;
+
+    const isCompleted = status === 'completed';
+    const isCanceled = status === 'canceled';
+    const isOnlinePayment = booking.paymentMethod === 'online';
+
+    if (isCompleted && isOnlinePayment) {
+      const stripeCustomerId = booking.customer.stripeCustomerId;
+      const amount = Number(booking.service.base_price) * 100; // cents
+      const currency = 'usd';
+
+      if (!stripeCustomerId) {
+        throw new BadRequestException('Stripe customer ID is missing.');
+      }
+
+      try {
+        // await this.stripeService.chargeSavedCard({
+        //   customerId: booking.customer.stripeCustomerId,
+        //   amount,
+        //   currency: 'usd',
+        //   paymentMethodId: booking.customer.stripePaymentMethodId,
+        // });
+
+        // await this.paymentsService.markAsSuccessfulByBookingId(booking.id);
+
+        // // Create transaction
+        // await this.prisma.transaction.create({
+        //   data: {
+        //     bookingId: booking.id,
+        //     stripePaymentId: paymentIntent.id,
+        //     amount: new Prisma.Decimal(amount / 100), // dollars
+        //     currency,
+        //     status: TransactionStatus.successful,
+        //     paymentMethod: 'card',
+        //     transactionType: 'charge',
+        //   },
+        // });
+      } catch (err) {
+        // Log failed transaction too
+        await this.prisma.transaction.create({
+          data: {
+            bookingId: booking.id,
+            amount: new Prisma.Decimal(amount / 100),
+            currency,
+            status: 'failed',
+            paymentMethod: 'card',
+            transactionType: 'charge',
+            failureReason: err.message,
+          },
+        });
+
+        throw new BadRequestException('Stripe payment failed: ' + err.message);
+      }
+    }
+
+    if (booking.type === 'one_time' && (isCompleted || isCanceled)) {
       await this.bookingService.cancelorComplete(
-        scheduleExist.bookingId,
+        booking.id,
         userId,
         role,
         status,
       );
     }
-    return schedule;
+
+    return updatedSchedule;
   }
 
   async update(id: string, updateScheduleDto: UpdateScheduleDto) {
