@@ -125,7 +125,7 @@ export class CreateBookingDto {
   subscriptionTypeId?: string;
 
   @IsString()
-  @IsOptional()
+  @ValidateIf((o) => o.type === ServiceType.recurring)
   recurringTypeId?: string;
 
   @ValidateNested()

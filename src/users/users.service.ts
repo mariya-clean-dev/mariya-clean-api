@@ -170,14 +170,16 @@ export class UsersService {
     role: string;
     phone?: string;
   }) {
-    let user: any = await this.findByEmail(data.email);
+    let user = await this.findByEmail(data.email);
+
     if (!user) {
       // create Stripe customer first
       const stripeCustomer = await this.stripeService.createCustomer(
         data.email,
         data.name,
       );
-      const user = await this.prisma.user.create({
+
+      user = await this.prisma.user.create({
         data: {
           name: data.name,
           email: data.email,
@@ -185,7 +187,7 @@ export class UsersService {
           stripeCustomerId: stripeCustomer.id,
           role: {
             connect: {
-              name: 'customer',
+              name: 'customer', // optionally use data.role here
             },
           },
           password: null,
@@ -195,6 +197,7 @@ export class UsersService {
         },
       });
     }
+
     return user;
   }
 
