@@ -41,12 +41,6 @@ import { MailService } from 'src/mailer/mailer.service';
 import { stringify } from 'querystring';
 import { RescheduleDto } from './dto/reschedule.dto';
 
-function getFirstDayOfNextMonth(): Date {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed
-  return new Date(year, month + 1, 1);
-}
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
