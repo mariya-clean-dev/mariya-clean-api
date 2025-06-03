@@ -528,53 +528,60 @@ export class SchedulerService {
       throw new NotFoundException('Schedule not found');
     }
 
-    const updatedSchedule = await this.prisma.schedule.update({
-      where: { id },
-      data: { status },
-    });
-
     const booking = scheduleExist.booking;
-    if (!booking) return updatedSchedule;
+    if (!booking) return scheduleExist;
 
     const isCompleted = status === 'completed';
     const isCanceled = status === 'canceled';
     const isOnlinePayment = booking.paymentMethod === 'online';
 
+    let updatedSchedule;
+
     if (isCompleted && isOnlinePayment) {
       const stripeCustomerId = booking.customer.stripeCustomerId;
-      const amount = Number(booking.service.base_price) * 100; // cents
+      const paymentMethodId = booking.customer.stripePaymentId;
+      const amountInCents = Number(booking.service.base_price) * 100;
       const currency = 'usd';
 
-      if (!stripeCustomerId) {
-        throw new BadRequestException('Stripe customer ID is missing.');
+      if (!stripeCustomerId || !paymentMethodId) {
+        throw new BadRequestException(
+          'Stripe customer or payment method ID missing',
+        );
       }
 
       try {
-        // await this.stripeService.chargeSavedCard({
-        //   customerId: booking.customer.stripeCustomerId,
-        //   amount,
-        //   currency: 'usd',
-        //   paymentMethodId: booking.customer.stripePaymentMethodId,
-        // });
-        // await this.paymentsService.markAsSuccessfulByBookingId(booking.id);
-        // // Create transaction
-        // await this.prisma.transaction.create({
-        //   data: {
-        //     bookingId: booking.id,
-        //     stripePaymentId: paymentIntent.id,
-        //     amount: new Prisma.Decimal(amount / 100), // dollars
-        //     currency,
-        //     status: TransactionStatus.successful,
-        //     paymentMethod: 'card',
-        //     transactionType: 'charge',
-        //   },
-        // });
-      } catch (err) {
-        // Log failed transaction too
+        // Charge the saved payment method
+        const paymentIntent = await this.stripeService.chargeSavedCard({
+          customerId: stripeCustomerId,
+          amount: amountInCents,
+          currency,
+          paymentMethodId,
+        });
+
+        // Mark the schedule as paid
+        updatedSchedule = await this.prisma.schedule.update({
+          where: { id },
+          data: { status: ScheduleStatus.completed },
+        });
+
+        // Record transaction
         await this.prisma.transaction.create({
           data: {
             bookingId: booking.id,
-            amount: new Prisma.Decimal(amount / 100),
+            stripePaymentId: paymentIntent.id,
+            amount: new Prisma.Decimal(amountInCents / 100), // dollars
+            currency,
+            status: 'successful',
+            paymentMethod: 'card',
+            transactionType: 'charge',
+          },
+        });
+      } catch (err) {
+        // Log failed transaction
+        await this.prisma.transaction.create({
+          data: {
+            bookingId: booking.id,
+            amount: new Prisma.Decimal(amountInCents / 100),
             currency,
             status: 'failed',
             paymentMethod: 'card',
@@ -585,8 +592,15 @@ export class SchedulerService {
 
         throw new BadRequestException('Stripe payment failed: ' + err.message);
       }
+    } else {
+      // Just update status normally if not online payment
+      updatedSchedule = await this.prisma.schedule.update({
+        where: { id },
+        data: { status },
+      });
     }
 
+    // Complete or cancel one-time bookings
     if (booking.type === 'one_time' && (isCompleted || isCanceled)) {
       await this.bookingService.cancelorComplete(
         booking.id,

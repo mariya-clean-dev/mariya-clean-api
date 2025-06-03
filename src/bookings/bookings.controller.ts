@@ -135,7 +135,7 @@ export class BookingsController {
 
       await this.schedulerService.createMonthSchedules([monthSchedule]);
 
-      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
+      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {  
         // Generate 2 months of schedules immediately
         await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
       }
