@@ -312,78 +312,67 @@ export class StripeWebhookController {
   }
 
   private async handleCheckoutSessionCompleted(session: any) {
-    const subscriptionId = session.subscription;
-    const customerEmail = session.customer_details.email;
-    const internalSubId = session.metadata?.internalSubId;
+    const { bookingId, date, time, userId } = session.metadata || {};
 
-    if (internalSubId) {
-      // Activate internal subscription
-      await this.prisma.subscription.update({
-        where: { id: internalSubId },
-        data: {
-          stripeSubscriptionId: subscriptionId,
-          status: 'active',
-        },
-      });
-
-      const bookingId = session.metadata.bookingId;
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: {
-          service: true,
-          customer: true,
-          bookingAddress: {
-            include: { address: true },
-          },
-        },
-      });
-
-      if (!booking) {
-        throw new Error('Booking not found after payment.');
-      }
-
-      // Mark payment as successful
-      await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
-        stripeSubscriptionId: subscriptionId.toString(),
-      });
-
-      // Generate schedules based on booking type
-      if (booking.type === 'recurring') {
-        await this.shedulerService.generateSchedulesForBooking(booking.id);
-      } else if (booking.type === 'one_time') {
-        // Extract date/time from metadata or booking table (adjust if needed)
-        const date = session.metadata.date; // e.g. '2025-06-01'
-        const time = session.metadata.time; // e.g. '14:30'
-
-        if (!date || !time) {
-          throw new Error(
-            'Date and time are required for one-time booking schedule.',
-          );
-        }
-
-        await this.shedulerService.generateOneTimeScheduleForBooking(
-          booking.id,
-          date,
-          time,
-        );
-      }
-
-      // Send booking confirmation
-      await this.mailService.sendBookingConfirmationEmail(
-        booking.customer.email,
-        booking.customer.name,
-        booking.service.name,
-        booking.bookingAddress.address.line_1,
-      );
-
-      // Send notification
-      await this.notificationsService.createNotification({
-        userId: session.metadata.userId,
-        title: 'Subscription Activated',
-        message: 'Your subscription has been successfully activated.',
-        notificationType: NotificationType.payment_confirmation,
-      });
+    if (!bookingId) {
+      throw new Error('Missing bookingId in metadata.');
     }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        service: true,
+        customer: true,
+        bookingAddress: {
+          include: { address: true },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new Error('Booking not found after payment.');
+    }
+
+    // Mark payment as successful
+    // await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
+    //   stripeSessionId: session.id, // or any identifier you want to store
+    // });
+
+    // Generate schedules
+    if (booking.type === 'recurring') {
+      await this.shedulerService.generateSchedulesForBooking(booking.id);
+    } else if (booking.type === 'one_time') {
+      if (!date || !time) {
+        throw new Error('Date and time are required for one-time booking.');
+      }
+      await this.shedulerService.generateOneTimeScheduleForBooking(
+        booking.id,
+        date,
+        time,
+      );
+    } else {
+      throw new Error(`Unhandled booking type: ${booking.type}`);
+    }
+
+    // Send booking confirmation email
+    await this.mailService.sendBookingConfirmationEmail(
+      booking.customer.email,
+      booking.customer.name,
+      booking.service.name,
+      booking.bookingAddress.address.line_1,
+    );
+
+    // Send notification
+    await this.notificationsService.createNotification({
+      userId,
+      title: 'Booking Confirmed',
+      message: 'Your payment was successful. Schedule has been created.',
+      notificationType: NotificationType.payment_confirmation,
+    });
+
+    console.log(
+      `✅ Schedule created for booking ${booking.id} (${booking.type})`,
+    );
   }
 
   private async handleCheckoutSessionExpired(session: any) {

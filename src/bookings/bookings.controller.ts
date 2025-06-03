@@ -109,6 +109,16 @@ export class BookingsController {
         customerId: user.stripeCustomerId,
         successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
         cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
+        metadata: {
+          bookingId: booking.id,
+          userId: user.id,
+          ...(createBookingDto.type === 'one_time'
+            ? {
+                date: createBookingDto.date,
+                time: createBookingDto.time,
+              }
+            : {}),
+        },
       });
 
       stripeData = { checkoutUrl: session.url };
@@ -135,7 +145,7 @@ export class BookingsController {
 
       await this.schedulerService.createMonthSchedules([monthSchedule]);
 
-      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {  
+      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
         // Generate 2 months of schedules immediately
         await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
       }

@@ -122,7 +122,7 @@ export class StripeService {
     customerId: string;
     successUrl: string;
     cancelUrl: string;
-    metadata?: Record<string, string>;
+    metadata?: any;
   }): Promise<Stripe.Checkout.Session> {
     return this.stripeClient.checkout.sessions.create({
       mode: 'setup',
