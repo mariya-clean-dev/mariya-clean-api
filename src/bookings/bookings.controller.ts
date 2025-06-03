@@ -100,13 +100,13 @@ export class BookingsController {
     // Stripe payment setup if required
     let stripeData = null;
     if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
-      const customer = await this.stripeService.createCustomer(
-        createBookingDto.email,
-        createBookingDto.name,
-      );
+      // const customer = await this.stripeService.createCustomer(
+      //   createBookingDto.email,
+      //   createBookingDto.name,
+      // );
 
       const session = await this.stripeService.createCardSetupSession({
-        customerId: customer.id,
+        customerId: user.stripeCustomerId,
         successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
         cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
       });

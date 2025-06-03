@@ -34,8 +34,6 @@ export class SchedulerController {
     private readonly resposneService: ResponseService,
   ) {}
 
-
-
   @Post('auto-schedules')
   @UseGuards(RolesGuard)
   @Roles('admin')
@@ -84,7 +82,6 @@ export class SchedulerController {
     }
   }
 
-
   @Get('schedules')
   @Roles('admin', 'staff')
   async getSchedules(
@@ -119,40 +116,31 @@ export class SchedulerController {
   @Get('time-slots')
   @Public()
   async getTimeSlots(
-    // @Query('weekOfMonth') weekOfMonthRaw?: string,
     @Query('dayOfWeek') dayOfWeekRaw?: string,
     @Query('date') dateRaw?: string,
     @Query('durationMins') durationMinsRaw?: string,
   ) {
-    // const weekOfMonth = weekOfMonthRaw
-    //   ? parseInt(weekOfMonthRaw, 10)
-    //   : undefined;
     const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
-    const durationMins = durationMinsRaw ? parseInt(durationMinsRaw, 10) : 60;
+    const durationMins = durationMinsRaw ? parseInt(durationMinsRaw, 10) : 30;
     const date = dateRaw ? new Date(dateRaw) : undefined;
 
     const hasDate = !!dateRaw && !isNaN(date.getTime());
-    const hasWeekAndDay =
-      // weekOfMonth !== undefined &&
-      dayOfWeek !== undefined &&
-      //  !isNaN(weekOfMonth) &&
-      !isNaN(dayOfWeek);
+    const hasDayOfWeek = dayOfWeek !== undefined && !isNaN(dayOfWeek);
 
-    if (!hasDate && !hasWeekAndDay) {
+    if (!hasDate && !hasDayOfWeek) {
       throw new BadRequestException('Provide either a valid date or dayOfWeek');
     }
-
-    if (hasDate && hasWeekAndDay) {
+    if (hasDate && hasDayOfWeek) {
       throw new BadRequestException(
         'Provide either a valid date or dayOfWeek, not both',
       );
     }
-
-    if (hasWeekAndDay && (dayOfWeek < 0 || dayOfWeek > 6)) {
+    if (hasDayOfWeek && (dayOfWeek < 0 || dayOfWeek > 6)) {
       throw new BadRequestException(
-        'params required: valid and dayOfWeek (0-6)',
+        'dayOfWeek must be between 0 (Sunday) and 6 (Saturday)',
       );
     }
+
     const timeSlots = hasDate
       ? await this.schedulerService.getTimeSlotswithDate(date, durationMins)
       : await this.schedulerService.getTimeSlots(dayOfWeek, durationMins);

@@ -79,6 +79,9 @@ export class StripeWebhookController {
         case 'invoice.payment_succeeded':
           await this.handleInvoicePaymentSucceeded(event.data.object);
           break;
+        case 'setup_intent.succeeded':
+          await this.handleSetupIntentSucceeded(event.data.object);
+          break;
         // Add more event types as needed
       }
 
@@ -138,6 +141,38 @@ export class StripeWebhookController {
         });
       }
     }
+  }
+
+  private async handleSetupIntentSucceeded(setupIntent: any) {
+    const customerId = setupIntent.customer; // Stripe customer ID
+    const paymentMethodId = setupIntent.payment_method;
+
+    if (!customerId || !paymentMethodId) {
+      console.warn(
+        'Missing customer or payment method in setup_intent.succeeded',
+      );
+      return;
+    }
+
+    // Use findFirst instead of findUnique because stripeCustomerId is not unique
+    const user = await this.prisma.user.findFirst({
+      where: { stripeCustomerId: customerId },
+    });
+
+    if (!user) {
+      console.warn(`User not found for Stripe customer ID: ${customerId}`);
+      return;
+    }
+
+    // Fix property name: should be stripePaymentId, not stripePaymentMethodId
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        stripePaymentId: paymentMethodId,
+      },
+    });
+
+    console.log(`Saved payment method ${paymentMethodId} for user ${user.id}`);
   }
 
   private async handlePaymentIntentFailed(paymentIntent: any) {

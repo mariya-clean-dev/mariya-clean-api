@@ -302,7 +302,7 @@ model Transaction {
 
 model Schedule {
   id              String         @id @default(uuid())
-  staffId         String         @map("staff_id")
+  staffId         String?         @map("staff_id")
   serviceId       String         @map("service_id")
   bookingId       String?        @map("booking_id")
   startTime       DateTime       @map("start_time")
@@ -312,7 +312,7 @@ model Schedule {
   status          ScheduleStatus
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
-  staff           User           @relation(fields: [staffId], references: [id])
+  staff           User?           @relation(fields: [staffId], references: [id])
   booking         Booking?       @relation(fields: [bookingId], references: [id])
   service         Service        @relation(fields: [serviceId], references: [id])
 
@@ -323,17 +323,19 @@ model StaffAvailability {
   id          String    @id @default(uuid())
   staffId     String    @map("staff_id")
   date        DateTime?
-  weekOfMonth Int?       @map("week_of_month")
+  weekOfMonth Int?      @map("week_of_month")
   dayOfWeek   Int       @map("day_of_week")
   startTime   DateTime  @map("start_time") @db.Time
-  endTime     DateTime  @map("end_time") @db.Time
-  isAvailable Boolean   @default(true) @map("is_available")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  endTime     DateTime  @map("end_time")   @db.Time
+  isAvailable Boolean   @default(true)     @map("is_available")
+  createdAt   DateTime  @default(now())    @map("created_at")
+  updatedAt   DateTime  @default(now())    @updatedAt @map("updated_at")
   staff       User      @relation(fields: [staffId], references: [id])
 
   @@map("staff_availability")
+  @@unique([staffId, date, startTime, endTime], name: "staffId_date_startTime_endTime")
 }
+
 
 model Review {
   id        String   @id @default(uuid())
