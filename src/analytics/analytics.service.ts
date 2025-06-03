@@ -479,7 +479,7 @@ export class AnalyticsService {
       }),
       this.prisma.booking.aggregate({
         where: {
-         // status: BookingStatus.booked, // optionally use: { in: [...] }
+          // status: BookingStatus.booked, // optionally use: { in: [...] }
           createdAt: {
             gte: fromDate,
             lte: toDate,
