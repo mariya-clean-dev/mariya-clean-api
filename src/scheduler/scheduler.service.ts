@@ -600,6 +600,20 @@ export class SchedulerService {
       });
     }
 
+    if (isCompleted && !isOnlinePayment) {
+      // Create a manual successful transaction record (e.g., cash payment)
+      await this.prisma.transaction.create({
+        data: {
+          bookingId: booking.id,
+          amount: new Prisma.Decimal(booking.price),
+          currency: 'usd',
+          status: 'successful',
+          paymentMethod: 'cash', 
+          transactionType: 'manual',
+        },
+      });
+    }
+
     // Complete or cancel one-time bookings
     if (booking.type === 'one_time' && (isCompleted || isCanceled)) {
       await this.bookingService.cancelorComplete(
