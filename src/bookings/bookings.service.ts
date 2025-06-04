@@ -224,7 +224,11 @@ export class BookingsService {
       let earliestDate = null;
 
       for (const schedule of booking.schedules) {
-        if (schedule.startTime && new Date(schedule.startTime) > new Date()) {
+        if (
+          schedule.status == 'scheduled' &&
+          schedule.startTime &&
+          new Date(schedule.startTime) > new Date()
+        ) {
           if (
             !earliestDate ||
             new Date(schedule.startTime) < new Date(earliestDate)

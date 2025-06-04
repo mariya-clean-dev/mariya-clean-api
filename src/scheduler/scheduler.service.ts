@@ -540,7 +540,7 @@ export class SchedulerService {
     if (isCompleted && isOnlinePayment) {
       const stripeCustomerId = booking.customer.stripeCustomerId;
       const paymentMethodId = booking.customer.stripePaymentId;
-      const amountInCents = Number(booking.service.base_price) * 100;
+      const amountInCents = Number(booking.price) * 100;
       const currency = 'usd';
 
       if (!stripeCustomerId || !paymentMethodId) {
@@ -951,7 +951,7 @@ export class SchedulerService {
     );
 
     const endDateTime = new Date(
-      startDateTime.getTime() + durationMins * 60 * 1000,
+      startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
     );
 
     const dayOfWeek = startDateTime.getUTCDay();
@@ -1001,7 +1001,7 @@ export class SchedulerService {
     const { dayOfWeek, time } = scheduleTemplate;
     const [hours, minutes] = time.split(':').map(Number);
 
-    let nextDate = this.getNextDateByDayOfWeek(dayOfWeek); // ✅ updated logic
+    let nextDate = this.getNextDateByDayOfWeek(dayOfWeek); // updated logic
     const endDate = new Date(nextDate);
     endDate.setDate(endDate.getDate() + durationInDays);
 
@@ -1023,7 +1023,7 @@ export class SchedulerService {
         service.durationMinutes,
       );
       const endDateTime = new Date(
-        startDateTime.getTime() + durationMins * 60 * 1000,
+        startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
       );
 
       const availableStaff = await this.findAvailableStaffSlot(
@@ -1032,7 +1032,6 @@ export class SchedulerService {
         startDateTime,
         endDateTime,
       );
-      console.log('available staffs', availableStaff);
       if (availableStaff) {
         await this.saveSchedule({
           date: formatDate(nextDate),
@@ -1047,6 +1046,7 @@ export class SchedulerService {
       nextDate.setDate(nextDate.getDate() + dayFrequency);
     }
   }
+
   // Helper functions (for context):
   private getNextDateByDayOfWeek(dayOfWeek: number): Date {
     const today = new Date();
@@ -1250,15 +1250,4 @@ export function getDurationFromAreaSize(
 ): number {
   const buffer = Number(60);
   return buffer + 60 + Math.ceil((area - 1000) / 500) * durationMinutes;
-}
-
-function formatToTimeString(date: Date): string {
-  return date.toTimeString().slice(0, 8); // HH:mm:ss
-}
-
-function createDateFromTimeString(timeStr: string): Date {
-  const [hours, minutes, seconds] = timeStr.split(':').map(Number);
-  const date = new Date();
-  date.setHours(hours, minutes, seconds || 0, 0);
-  return date;
 }
