@@ -41,7 +41,6 @@ import { MailService } from 'src/mailer/mailer.service';
 import { stringify } from 'querystring';
 import { RescheduleDto } from './dto/reschedule.dto';
 
-
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
 export class BookingsController {
@@ -396,7 +395,7 @@ export class BookingsController {
 
   @Post(':id/reschedule')
   @UseGuards(RolesGuard)
-  @Roles('customer')
+  @Roles('customer', 'admin')
   async reschedule(
     @Param('id') id: string,
     @Body() rescheduleDto: RescheduleDto,
