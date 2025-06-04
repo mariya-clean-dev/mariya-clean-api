@@ -748,13 +748,7 @@ export class SchedulerService {
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    const existingSchedule = await this.prisma.schedule.findFirst({
-      where: {
-        bookingId,
-        startTime: { gt: new Date() },
-      },
-      orderBy: { startTime: 'asc' },
-    });
+    const existingSchedule = await this.getNextScheduleForBooking(bookingId);
 
     if (!existingSchedule) {
       throw new NotFoundException(
@@ -826,6 +820,19 @@ export class SchedulerService {
       rescheduled: updatedOldSchedule,
       newSchedule,
     };
+  }
+
+  private async getNextScheduleForBooking(bookingId: string) {
+    return this.prisma.schedule.findFirst({
+      where: {
+        bookingId,
+        status: 'scheduled',
+        startTime: { gt: new Date() },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
   }
 
   async remove(id: string) {
