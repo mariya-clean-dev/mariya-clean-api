@@ -26,7 +26,7 @@ enum ServiceType {
 enum ScheduleStatus {
   scheduled
   in_progress
-  completed
+  completed 
   missed
   canceled
   refunded

@@ -127,6 +127,12 @@ export class BookingsController {
           createBookingDto.date,
           createBookingDto.time,
         );
+        await this.mailService.sendBookingConfirmationEmail(
+          user.email,
+          user.name,
+          booking.service.name,
+          booking.bookingAddress.address.line_1,
+        );
       }
     } else if (createBookingDto.type === ServiceType.recurring) {
       // Create MonthSchedule
@@ -141,15 +147,15 @@ export class BookingsController {
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
         // Generate 2 months of schedules immediately
         await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
+
+        await this.mailService.sendBookingConfirmationEmail(
+          user.email,
+          user.name,
+          booking.service.name,
+          booking.bookingAddress.address.line_1,
+        );
       }
     }
-
-    await this.mailService.sendBookingConfirmationEmail(
-      user.email,
-      user.name,
-      booking.service.name,
-      booking.bookingAddress.address.line_1,
-    );
 
     return this.responseService.successResponse(
       'Booking successfully saved...',
