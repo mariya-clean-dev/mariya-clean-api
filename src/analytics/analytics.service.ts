@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BookingStatus, Prisma, PrismaClient } from '@prisma/client';
+import {
+  BookingStatus,
+  Prisma,
+  PrismaClient,
+  TransactionStatus,
+} from '@prisma/client';
 import { startOfDay, endOfDay } from 'date-fns';
 
 @Injectable()
@@ -477,16 +482,16 @@ export class AnalyticsService {
           },
         },
       }),
-      this.prisma.booking.aggregate({
+      this.prisma.transaction.aggregate({
         where: {
-          // status: BookingStatus.booked, // optionally use: { in: [...] }
+          status: TransactionStatus.successful, // adjust if your enum/field is different
           createdAt: {
             gte: fromDate,
             lte: toDate,
           },
         },
         _sum: {
-          price: true,
+          amount: true,
         },
       }),
       this.prisma.user.count({
@@ -502,7 +507,7 @@ export class AnalyticsService {
 
     return {
       totalClients,
-      totalEarnings: totalEarningsData._sum.price?.toNumber() || 0,
+      totalEarnings: totalEarningsData._sum.amount?.toNumber() || 0,
       totalStaff,
     };
   }
