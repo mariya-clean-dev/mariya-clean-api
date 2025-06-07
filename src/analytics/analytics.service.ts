@@ -473,22 +473,22 @@ export class AnalyticsService {
     toDate.setHours(23, 59, 59, 999);
 
     const [distinctClients, totalEarningsData, totalStaff] = await Promise.all([
-      this.prisma.booking.findMany({
+      this.prisma.user.findMany({
         where: {
-          userId: {
-            not: null,
-          },
-          date: {
-            gte: fromDate,
-            lte: toDate,
-          },
-          status: {
-            in: ['booked', 'in_progress'],
+          customerBookings: {
+            some: {
+              status: {
+                in: ['booked', 'in_progress'],
+              },
+            },
           },
         },
-        distinct: ['userId'],
-        select: {
-          userId: true,
+        include: {
+          customerBookings: {
+            where: {
+              status: 'in_progress',
+            },
+          },
         },
       }),
       this.prisma.transaction.aggregate({

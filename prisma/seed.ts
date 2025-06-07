@@ -57,97 +57,97 @@ async function main() {
   });
 
   // Create services
-  const regularService = await prisma.service.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      name: 'Regular Home Cleaning',
-      description: 'Standard cleaning service for homes',
-      durationMinutes: 120,
-      isActive: true,
-      base_price: 150,
-      bathroom_rate: 200,
-      room_rate: 300,
-      square_foot_price: 1.5,
-    },
-  });
+  // const regularService = await prisma.service.upsert({
+  //   where: { id: '1' },
+  //   update: {},
+  //   create: {
+  //     id: '1',
+  //     name: 'Regular Home Cleaning',
+  //     description: 'Standard cleaning service for homes',
+  //     durationMinutes: 120,
+  //     isActive: true,
+  //     base_price: 150,
+  //     bathroom_rate: 200,
+  //     room_rate: 300,
+  //     square_foot_price: 1.5,
+  //   },
+  // });
 
-  const deepService = await prisma.service.upsert({
-    where: { id: '2' },
-    update: {},
-    create: {
-      id: '2',
-      name: 'Deep Home Cleaning',
-      description: 'Thorough cleaning service for homes',
-      durationMinutes: 240,
-      isActive: true,
-      base_price: 190,
-      bathroom_rate: 250,
-      room_rate: 350,
-      square_foot_price: 2.5,
-    },
-  });
+  // const deepService = await prisma.service.upsert({
+  //   where: { name: 'Deep Home Cleaning' },
+  //   update: {},
+  //   create: {
+  //     id: '2',
+  //     name: 'Deep Home Cleaning',
+  //     description: 'Thorough cleaning service for homes',
+  //     durationMinutes: 45,
+  //     isActive: true,
+  //     base_price: 190,
+  //     bathroom_rate: 250,
+  //     room_rate: 350,
+  //     square_foot_price: 2.5,
+  //   },
+  // });
 
   // Create service add-ons
-  await prisma.serviceAddOn.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      serviceId: regularService.id,
-      name: 'Window Cleaning',
-      description: 'Clean all windows inside and out',
-      price: 40,
+  // await prisma.serviceAddOn.upsert({
+  //   where: { id: '1' },
+  //   update: {},
+  //   create: {
+  //     id: '1',
+  //     serviceId: regularService.id,
+  //     name: 'Window Cleaning',
+  //     description: 'Clean all windows inside and out',
+  //     price: 40,
+  //   },
+  // });
+
+  // await prisma.serviceAddOn.upsert({
+  //   where: { id: '2' },
+  //   update: {},
+  //   create: {
+  //     id: '2',
+  //     serviceId: regularService.id,
+  //     name: 'Refrigerator Cleaning',
+  //     description: 'Clean inside and out of refrigerator',
+  //     price: 30,
+  //   },
+  // });
+
+  // await prisma.serviceAddOn.upsert({
+  //   where: { id: '3' },
+  //   update: {},
+  //   create: {
+  //     id: '3',
+  //     serviceId: deepService.id,
+  //     name: 'Oven Cleaning',
+  //     description: 'Deep clean oven interior and exterior',
+  //     price: 45,
+  //   },
+  // });
+
+  const RecurringType = [
+    {
+      name: 'Weekly',
+      description: 'A recurring weekly plan',
+      dayFrequency: 7, // in days
+      available_discount: 10.0,
     },
-  });
-
-  await prisma.serviceAddOn.upsert({
-    where: { id: '2' },
-    update: {},
-    create: {
-      id: '2',
-      serviceId: regularService.id,
-      name: 'Refrigerator Cleaning',
-      description: 'Clean inside and out of refrigerator',
-      price: 30,
+    {
+      name: 'Bi-Weekly',
+      description: 'A recurring bi-weekly plan',
+      dayFrequency: 14,
+      available_discount: 5.0,
     },
-  });
+  ];
 
-  await prisma.serviceAddOn.upsert({
-    where: { id: '3' },
-    update: {},
-    create: {
-      id: '3',
-      serviceId: deepService.id,
-      name: 'Oven Cleaning',
-      description: 'Deep clean oven interior and exterior',
-      price: 45,
-    },
-  });
-
-    const RecurringType = [
-      {
-        name: 'Weekly',
-        description: 'A recurring weekly plan',
-        dayFrequency: 7, // in days
-        available_discount: 10.0,
-      },
-      {
-        name: 'Bi-Weekly',
-        description: 'A recurring bi-weekly plan',
-        dayFrequency: 14,
-        available_discount: 5.0,
-      },
-    ];
-
-    for (const plan of RecurringType) {
-      await prisma.recurringType.upsert({
-        where: { name: plan.name },
-        update: {},
-        create: plan,
-      });
-    }
+  for (const plan of RecurringType) {
+    await prisma.recurringType.upsert({
+      where: { name: plan.name },
+      update: {},
+      create: plan,
+    });
+  }
 
   const subscriptionPlans = [
     {
