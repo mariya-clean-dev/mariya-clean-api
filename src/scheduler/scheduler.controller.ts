@@ -116,36 +116,34 @@ export class SchedulerController {
   @Get('time-slots')
   @Public()
   async getTimeSlots(
-    @Query('dayOfWeek') dayOfWeekRaw?: string,
     @Query('date') dateRaw?: string,
-    @Query('durationMins') durationMinsRaw?: string,
+    @Query('dayOfWeek') dayOfWeekRaw?: string,
+    @Query('serviceId') serviceId?: string,
   ) {
-    const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
-    const durationMins = durationMinsRaw ? parseInt(durationMinsRaw, 10) : 30;
     const date = dateRaw ? new Date(dateRaw) : undefined;
+    const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
 
-    const hasDate = !!dateRaw && !isNaN(date.getTime());
-    const hasDayOfWeek = dayOfWeek !== undefined && !isNaN(dayOfWeek);
+    const hasDate = !!date && !isNaN(date.getTime());
+    const hasDayOfWeek =
+      typeof dayOfWeek === 'number' && dayOfWeek >= 0 && dayOfWeek <= 6;
 
     if (!hasDate && !hasDayOfWeek) {
       throw new BadRequestException('Provide either a valid date or dayOfWeek');
     }
+
     if (hasDate && hasDayOfWeek) {
       throw new BadRequestException(
-        'Provide either a valid date or dayOfWeek, not both',
-      );
-    }
-    if (hasDayOfWeek && (dayOfWeek < 0 || dayOfWeek > 6)) {
-      throw new BadRequestException(
-        'dayOfWeek must be between 0 (Sunday) and 6 (Saturday)',
+        'Provide either a date or dayOfWeek, not both',
       );
     }
 
-    const timeSlots = hasDate
-      ? await this.schedulerService.getTimeSlotswithDate(date, durationMins)
-      : await this.schedulerService.getTimeSlots(dayOfWeek, durationMins);
+    const slots = await this.schedulerService.getTimeSlots({
+      date: hasDate ? date : undefined,
+      dayOfWeek: hasDayOfWeek ? dayOfWeek : undefined,
+      serviceId: serviceId || undefined,
+    });
 
-    return this.resposneService.successResponse('Time slots list', timeSlots);
+    return this.resposneService.successResponse('Time slots list', slots);
   }
 
   // async getTimeSlots(
