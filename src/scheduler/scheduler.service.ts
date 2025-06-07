@@ -261,10 +261,12 @@ export class SchedulerService {
   async getTimeSlots({
     date,
     dayOfWeek,
+    durationMins,
     serviceId,
   }: {
     date?: Date;
     dayOfWeek?: number;
+    durationMins?: number;
     serviceId?: string;
   }) {
     const bufferMins = 30;
@@ -286,15 +288,22 @@ export class SchedulerService {
     }
 
     // 2. Calculate total duration
-    let totalDuration = defaultDuration;
-    if (serviceId) {
+    let totalDuration = durationMins;
+
+    if (!totalDuration && serviceId) {
       const service = await this.prisma.service.findUnique({
         where: { id: serviceId },
       });
+
       if (service?.durationMinutes) {
         totalDuration = service.durationMinutes;
       }
     }
+
+    if (!totalDuration) {
+      totalDuration = defaultDuration;
+    }
+
     totalDuration += bufferMins;
 
     // 3. Get staff list

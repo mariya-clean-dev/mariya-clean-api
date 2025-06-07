@@ -118,10 +118,14 @@ export class SchedulerController {
   async getTimeSlots(
     @Query('date') dateRaw?: string,
     @Query('dayOfWeek') dayOfWeekRaw?: string,
-    @Query('serviceId') serviceId?: string,
+    @Query('durationMins') durationMinsRaw?: string,
+    @Query('serviceId') serviceId?: string, 
   ) {
     const date = dateRaw ? new Date(dateRaw) : undefined;
     const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
+    const durationMins = durationMinsRaw
+      ? parseInt(durationMinsRaw, 10)
+      : undefined;
 
     const hasDate = !!date && !isNaN(date.getTime());
     const hasDayOfWeek =
@@ -140,7 +144,8 @@ export class SchedulerController {
     const slots = await this.schedulerService.getTimeSlots({
       date: hasDate ? date : undefined,
       dayOfWeek: hasDayOfWeek ? dayOfWeek : undefined,
-      serviceId: serviceId || undefined,
+      durationMins,
+      serviceId,
     });
 
     return this.resposneService.successResponse('Time slots list', slots);
