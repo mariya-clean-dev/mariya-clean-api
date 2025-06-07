@@ -472,19 +472,28 @@ export class AnalyticsService {
     fromDate.setHours(0, 0, 0, 0);
     toDate.setHours(23, 59, 59, 999);
 
-    const [totalClients, totalEarningsData, totalStaff] = await Promise.all([
-      this.prisma.user.count({
+    const [distinctClients, totalEarningsData, totalStaff] = await Promise.all([
+      this.prisma.booking.findMany({
         where: {
-          role: {
-            is: {
-              name: 'customer',
-            },
+          userId: {
+            not: null,
           },
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+          status: {
+            in: ['booked', 'in_progress'],
+          },
+        },
+        distinct: ['userId'],
+        select: {
+          userId: true,
         },
       }),
       this.prisma.transaction.aggregate({
         where: {
-          status: TransactionStatus.successful, // adjust if your enum/field is different
+          status: TransactionStatus.successful,
           createdAt: {
             gte: fromDate,
             lte: toDate,
@@ -506,7 +515,7 @@ export class AnalyticsService {
     ]);
 
     return {
-      totalClients,
+      totalClients: distinctClients.length,
       totalEarnings: totalEarningsData._sum.amount?.toNumber() || 0,
       totalStaff,
     };
