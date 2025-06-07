@@ -21,10 +21,6 @@ export class UpdateServiceDto {
 
   @IsNumber()
   @IsOptional()
-  monthlySlots?: number;
-
-  @IsNumber()
-  @IsOptional()
   base_price?: number;
 
   @IsNumber()

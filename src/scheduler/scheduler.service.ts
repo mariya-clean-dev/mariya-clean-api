@@ -45,25 +45,25 @@ export class SchedulerService {
     private readonly paymentsService: PaymentsService,
   ) {}
 
-  async findAvailableStaff(date: Date) {
+  async findAvailableStaff(startTime: Date, endTime: Date) {
     const allStaff = await this.prisma.user.findMany({
       where: { role: { name: 'staff' } },
+      orderBy: { priority: 'asc' },
     });
-
     for (const staff of allStaff) {
       const hasConflict = await this.prisma.schedule.findFirst({
         where: {
           staffId: staff.id,
-          startTime: {
-            lte: date,
-          },
-          endTime: {
-            gte: date,
-          },
+          OR: [
+            {
+              startTime: { lt: endTime },
+              endTime: { gt: startTime },
+            },
+          ],
         },
       });
 
-      if (!hasConflict) return staff; // Return first available
+      if (!hasConflict) return staff;
     }
 
     return null;
@@ -258,28 +258,63 @@ export class SchedulerService {
     return { h: date.getUTCHours(), m: date.getUTCMinutes() };
   }
 
-  async getTimeSlotswithDate(date: Date, durationMins: number = 60) {
-    const inputDate = dayjs(date).utc().startOf('day');
+  async getTimeSlots({
+    date,
+    dayOfWeek,
+    serviceId,
+  }: {
+    date?: Date;
+    dayOfWeek?: number;
+    serviceId?: string;
+  }) {
+    const bufferMins = 30;
+    const defaultDuration = 120;
 
-    // 1. Get all staff users
+    // 1. Determine target date
+    let targetDate: dayjs.Dayjs;
+    if (date) {
+      targetDate = dayjs(date).utc().startOf('day');
+    } else if (dayOfWeek !== undefined) {
+      targetDate = dayjs().utc().startOf('day');
+      while (targetDate.day() !== dayOfWeek) {
+        targetDate = targetDate.add(1, 'day');
+      }
+    } else {
+      throw new BadRequestException(
+        'Either date or dayOfWeek must be provided',
+      );
+    }
+
+    // 2. Calculate total duration
+    let totalDuration = defaultDuration;
+    if (serviceId) {
+      const service = await this.prisma.service.findUnique({
+        where: { id: serviceId },
+      });
+      if (service?.durationMinutes) {
+        totalDuration = service.durationMinutes;
+      }
+    }
+    totalDuration += bufferMins;
+
+    // 3. Get staff list
     const staffs = await this.prisma.user.findMany({
       where: { role: { name: 'staff' } },
       select: { id: true },
     });
 
-    // 2. For each staff, get unavailable ranges for that date
+    // 4. Get unavailability ranges
     const staffUnavailabilityMap: Record<
       string,
       { start: dayjs.Dayjs; end: dayjs.Dayjs }[]
     > = {};
-
     for (const staff of staffs) {
-      const unavailableRanges = await this.prisma.staffAvailability.findMany({
+      const ranges = await this.prisma.staffAvailability.findMany({
         where: {
           staffId: staff.id,
           date: {
-            gte: inputDate.toDate(),
-            lte: inputDate.endOf('day').toDate(),
+            gte: targetDate.toDate(),
+            lte: targetDate.endOf('day').toDate(),
           },
           isAvailable: false,
         },
@@ -290,165 +325,37 @@ export class SchedulerService {
         },
       });
 
-      staffUnavailabilityMap[staff.id] = unavailableRanges.map((range) => {
-        const { h: sh, m: sm } = this.parseTime(range.startTime);
-        const { h: eh, m: em } = this.parseTime(range.endTime);
-
+      staffUnavailabilityMap[staff.id] = ranges.map((r) => {
+        const { h: sh, m: sm } = this.parseTime(r.startTime);
+        const { h: eh, m: em } = this.parseTime(r.endTime);
         return {
-          start: dayjs(range.date)
-            .utc()
-            .hour(sh)
-            .minute(sm)
-            .second(0)
-            .millisecond(0),
-          end: dayjs(range.date)
-            .utc()
-            .hour(eh)
-            .minute(em)
-            .second(0)
-            .millisecond(0),
+          start: dayjs(r.date).utc().hour(sh).minute(sm),
+          end: dayjs(r.date).utc().hour(eh).minute(em),
         };
       });
     }
 
+    // 5. Generate time slots
     const startHour = 9;
     const endHour = 18;
     const interval = 30;
-
     const slots: { time: string; isAvailable: boolean }[] = [];
 
-    let current = inputDate
-      .clone()
-      .hour(startHour)
-      .minute(0)
-      .second(0)
-      .millisecond(0);
+    let current = targetDate.clone().hour(startHour).minute(0).second(0);
 
     while (current.hour() < endHour) {
       const timeStr = current.format('HH:mm');
-      const serviceEndTime = current.clone().add(durationMins, 'minute');
+      const serviceEnd = current.clone().add(totalDuration, 'minute');
 
-      // 3. Check availability for each staff at this slot
-      let availableStaffCount = 0;
-
-      for (const staff of staffs) {
+      let isAvailable = staffs.some((staff) => {
         const unavailableRanges = staffUnavailabilityMap[staff.id] || [];
-
-        const isUnavailable = unavailableRanges.some(
+        return !unavailableRanges.some(
           (range) =>
-            current.isBefore(range.end) && serviceEndTime.isAfter(range.start),
+            current.isBefore(range.end) && serviceEnd.isAfter(range.start),
         );
-
-        if (!isUnavailable) {
-          availableStaffCount++;
-        }
-      }
-
-      slots.push({
-        time: timeStr,
-        isAvailable: availableStaffCount > 0,
       });
 
-      current = current.add(interval, 'minute');
-    }
-
-    return slots;
-  }
-
-  async getTimeSlots(dayOfWeek: number, durationMins: number = 60) {
-    const today = dayjs().utc().startOf('day');
-
-    // Find the next date with the given dayOfWeek
-    let targetDate = today.clone();
-    while (targetDate.day() !== dayOfWeek) {
-      targetDate = targetDate.add(1, 'day');
-    }
-
-    // 1. Get all staff users
-    const staffs = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' } },
-      select: { id: true },
-    });
-
-    // 2. For each staff, get unavailable ranges for that date
-    const staffUnavailabilityMap: Record<
-      string,
-      { start: dayjs.Dayjs; end: dayjs.Dayjs }[]
-    > = {};
-
-    for (const staff of staffs) {
-      const unavailableRanges = await this.prisma.staffAvailability.findMany({
-        where: {
-          staffId: staff.id,
-          date: targetDate.toDate(),
-          isAvailable: false,
-        },
-        select: {
-          date: true,
-          startTime: true,
-          endTime: true,
-        },
-      });
-
-      staffUnavailabilityMap[staff.id] = unavailableRanges.map((range) => {
-        const { h: sh, m: sm } = this.parseTime(range.startTime);
-        const { h: eh, m: em } = this.parseTime(range.endTime);
-
-        return {
-          start: dayjs(range.date)
-            .utc()
-            .hour(sh)
-            .minute(sm)
-            .second(0)
-            .millisecond(0),
-          end: dayjs(range.date)
-            .utc()
-            .hour(eh)
-            .minute(em)
-            .second(0)
-            .millisecond(0),
-        };
-      });
-    }
-
-    const startHour = 9;
-    const endHour = 18;
-    const interval = 30;
-
-    const slots: { time: string; isAvailable: boolean }[] = [];
-
-    let current = targetDate
-      .clone()
-      .utc()
-      .hour(startHour)
-      .minute(0)
-      .second(0)
-      .millisecond(0);
-
-    while (current.hour() < endHour) {
-      const timeStr = current.format('HH:mm');
-      const serviceEndTime = current.clone().add(durationMins, 'minute');
-
-      let availableStaffCount = 0;
-
-      for (const staff of staffs) {
-        const unavailableRanges = staffUnavailabilityMap[staff.id] || [];
-
-        const isUnavailable = unavailableRanges.some(
-          (range) =>
-            current.isBefore(range.end) && serviceEndTime.isAfter(range.start),
-        );
-
-        if (!isUnavailable) {
-          availableStaffCount++;
-        }
-      }
-
-      slots.push({
-        time: timeStr,
-        isAvailable: availableStaffCount > 0,
-      });
-
+      slots.push({ time: timeStr, isAvailable });
       current = current.add(interval, 'minute');
     }
 
@@ -608,7 +515,7 @@ export class SchedulerService {
           amount: new Prisma.Decimal(booking.price),
           currency: 'usd',
           status: 'successful',
-          paymentMethod: 'cash', 
+          paymentMethod: 'cash',
           transactionType: 'manual',
         },
       });
