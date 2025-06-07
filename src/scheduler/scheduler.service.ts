@@ -1100,10 +1100,7 @@ export class SchedulerService {
     startTime: Date,
     endTime: Date,
   ) {
-    // Convert a Date (with time) to a fixed reference date (e.g. 1970-01-01) preserving only the time part,
-    // so we can reliably compare times regardless of the date.
     function toComparableTime(dt: Date) {
-      // Extract time as HH:mm:ss from ISO string, create new Date at fixed day
       const timeStr = dt.toISOString().slice(11, 19); // "HH:mm:ss"
       return new Date(`1970-01-01T${timeStr}Z`);
     }
@@ -1111,19 +1108,14 @@ export class SchedulerService {
     const startComparable = toComparableTime(startTime);
     const endComparable = toComparableTime(endTime);
 
-    // Step 1: Get all staff ordered by priority
     const allStaffs = await this.prisma.user.findMany({
       where: { role: { name: 'staff' } },
       orderBy: { priority: 'asc' },
       select: { id: true, name: true, priority: true },
     });
 
-    // Step 2: Fetch all staff availability entries for the date or dayOfWeek
-    // Note: you might want to filter on date or dayOfWeek being NOT null depending on your data model
     const availabilities = await this.prisma.staffAvailability.findMany({
-      where: {
-        OR: [{ date }, { dayOfWeek }],
-      },
+      where: date ? { date } : { dayOfWeek },
       select: {
         staffId: true,
         startTime: true,
@@ -1132,7 +1124,6 @@ export class SchedulerService {
       },
     });
 
-    // Step 3: Find staff that are unavailable due to overlapping time ranges
     const unavailableStaffIds = new Set<string>();
 
     for (const availability of availabilities) {
@@ -1140,8 +1131,6 @@ export class SchedulerService {
         const availStart = toComparableTime(availability.startTime);
         const availEnd = toComparableTime(availability.endTime);
 
-        // Check if requested slot [startComparable, endComparable) overlaps with
-        // the unavailable slot [availStart, availEnd)
         const overlaps =
           availStart < endComparable && availEnd > startComparable;
 
@@ -1151,7 +1140,6 @@ export class SchedulerService {
       }
     }
 
-    // Step 4: Find the first staff not in unavailableStaffIds
     const availableStaff = allStaffs.find(
       (staff) => !unavailableStaffIds.has(staff.id),
     );
