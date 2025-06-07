@@ -23,6 +23,22 @@ export class UpdateServiceDto {
   @IsOptional()
   monthlySlots?: number;
 
+  @IsNumber()
+  @IsOptional()
+  base_price?: number;
+
+  @IsNumber()
+  @IsOptional()
+  bathroom_rate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  room_rate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  square_foot_price?: number;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

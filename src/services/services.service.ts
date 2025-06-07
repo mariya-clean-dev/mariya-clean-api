@@ -78,49 +78,29 @@ export class ServicesService {
     return service;
   }
 
-  // async update(id: string, updateServiceDto: UpdateServiceDto) {
-  //   // Check if service exists
-  //   await this.findOne(id);
+  async update(id: string, updateServiceDto: UpdateServiceDto) {
+    // Check if service exists
+    await this.findOne(id);
 
-  //   // Extract category IDs if provided
-  //   const { categoryIds, ...serviceData } = updateServiceDto;
+    // Extract category IDs if provided
+    const { categoryIds, ...serviceData } = updateServiceDto;
 
-  //   // If categories are provided, update them
-  //   if (categoryIds) {
-  //     // Delete existing mappings
-  //     await this.prisma.serviceCategoryMapping.deleteMany({
-  //       where: { serviceId: id },
-  //     });
-
-  //     // Create new mappings
-  //     await Promise.all(
-  //       categoryIds.map((categoryId) =>
-  //         this.prisma.serviceCategoryMapping.create({
-  //           data: {
-  //             service: { connect: { id } },
-  //             category: { connect: { id: categoryId } },
-  //           },
-  //         }),
-  //       ),
-  //     );
-  //   }
-
-  //   // Update service
-  //   return this.prisma.service.update({
-  //     where: { id },
-  //     data: serviceData,
-  //     include: {
-  //       // categories: {
-  //       //   include: {
-  //       //     category: true,
-  //       //   },
-  //       // },
-  //       // basePlans: true,
-  //       // priceCharts: true,
-  //       serviceAddOns: true,
-  //     },
-  //   });
-  // }
+    // Update service
+    return this.prisma.service.update({
+      where: { id },
+      data: serviceData,
+      include: {
+        // categories: {
+        //   include: {
+        //     category: true,
+        //   },
+        // },
+        // basePlans: true,
+        // priceCharts: true,
+        serviceAddOns: true,
+      },
+    });
+  }
 
   async remove(id: string) {
     // Check if service exists

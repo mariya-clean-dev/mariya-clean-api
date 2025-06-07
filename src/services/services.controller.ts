@@ -63,12 +63,12 @@ export class ServicesController {
     return this.responseService.successResponse('Service Details', service);
   }
 
-  // @Patch(':id')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles('admin')
-  // update(@Param('id') id: string, @Body() updateServiceDto: UpdateServiceDto) {
-  //   return this.servicesService.update(id, updateServiceDto);
-  // }
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  update(@Param('id') id: string, @Body() updateServiceDto: UpdateServiceDto) {
+    return this.servicesService.update(id, updateServiceDto);
+  }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
