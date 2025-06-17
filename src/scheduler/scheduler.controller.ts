@@ -60,6 +60,7 @@ export class SchedulerController {
   async generateSchedulesForBooking(
     @Param('bookingId') bookingId: string,
     @Body('numberOfDays') numberOfDays: number,
+    @Body('startDate') startDate: Date,
   ) {
     if (!numberOfDays || numberOfDays <= 0) {
       throw new BadRequestException(
@@ -71,6 +72,7 @@ export class SchedulerController {
       await this.schedulerService.generateSchedulesForBooking(
         bookingId,
         numberOfDays,
+        String(startDate),
       );
       return this.resposneService.successResponse(
         'Sucessfully Sheduled For Booking',
@@ -119,7 +121,7 @@ export class SchedulerController {
     @Query('date') dateRaw?: string,
     @Query('dayOfWeek') dayOfWeekRaw?: string,
     @Query('durationMins') durationMinsRaw?: string,
-    @Query('serviceId') serviceId?: string, 
+    @Query('serviceId') serviceId?: string,
   ) {
     const date = dateRaw ? new Date(dateRaw) : undefined;
     const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;

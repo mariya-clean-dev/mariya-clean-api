@@ -212,8 +212,10 @@ export class ServicesService {
     square_feet: number,
     no_of_rooms: number,
     no_of_bathrooms: number,
+    isEcoCleaning: boolean,
+    materialsProvidedByClient: boolean,
   ) {
-    // Fetch only the required fields, correctly mapped
+    // Fetch pricing parameters
     const service = await this.prisma.service.findUnique({
       where: { id: serviceId },
       select: {
@@ -228,27 +230,34 @@ export class ServicesService {
       throw new Error('Service not found');
     }
 
-    const base_price = Number(service.base_price); // ₹20
-    const price_per_sqft = Number(service.square_foot_price); // ₹110
-    const price_per_room = Number(service.room_rate); // ₹115
-    const price_per_bathroom = Number(service.bathroom_rate); // ₹10
+    const base_price = Number(service.base_price); // e.g. ₹20
+    const price_per_sqft = Number(service.square_foot_price); // e.g. ₹110
+    const price_per_room = Number(service.room_rate); // e.g. ₹115
+    const price_per_bathroom = Number(service.bathroom_rate); // e.g. ₹10
 
-    // Step 2: Normalize counts
+    // Normalize counts
     const roomCount = Math.max(0, no_of_rooms - 1); // First room included
     const bathCount = Math.max(0, no_of_bathrooms - 1); // First bathroom included
     const sqftMultiplier = Math.max(0, Math.ceil((square_feet - 1000) / 500)); // First 1000 sqft included
 
-    // Step 3: Calculate estimated price
-    const baseCalculatedPrice =
+    // Base calculated price before any adjustments
+    let baseCalculatedPrice =
       base_price +
       sqftMultiplier * price_per_sqft +
       roomCount * price_per_room +
       bathCount * price_per_bathroom;
 
-    // Step 4: Get recurring types from DB
+    // Eco cleaning = +5%, Client provides materials = -5%
+    if (isEcoCleaning) {
+      baseCalculatedPrice *= 1.05;
+    }
+    if (materialsProvidedByClient) {
+      baseCalculatedPrice *= 0.95;
+    }
+
+    // Get recurring types
     const recurringTypes = await this.prisma.recurringType.findMany();
 
-    // Step 5: Calculate adjusted prices for each recurring type
     const estimates = recurringTypes.map((type) => {
       const discountPercent = Number(type.available_discount ?? 0);
       const discountAmount = baseCalculatedPrice * (discountPercent / 100);
@@ -260,16 +269,20 @@ export class ServicesService {
         description: type.description,
         discountPercent,
         finalPrice,
+        isEcoCleaning,
+        materialsProvidedByClient,
       };
     });
 
-    // Step 6: Add one-time pricing as default
+    // Add one-time pricing
     const onetimeEstimate = {
       recurringTypeId: 'notASubcriptionTypeId',
       title: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
       finalPrice: baseCalculatedPrice,
+      isEcoCleaning,
+      materialsProvidedByClient,
     };
 
     estimates.push(onetimeEstimate);

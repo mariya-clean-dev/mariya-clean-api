@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsArray,
   Min,
+  IsBoolean,
 } from 'class-validator';
 
 export class GetPriceEstimateDto {
@@ -29,4 +30,12 @@ export class GetPriceEstimateDto {
   @IsString()
   @IsOptional()
   subcription_type_id?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isEcoCleaning?: boolean = false;
+
+  @IsBoolean()
+  @IsOptional()
+  materialsProvidedByClient?: boolean = false;
 }

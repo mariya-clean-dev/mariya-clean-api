@@ -128,6 +128,9 @@ export class UsersService {
         createdAt: true,
         updatedAt: true,
       },
+      orderBy: {
+        priority: 'asc', // or 'desc'
+      },
     });
   }
 
