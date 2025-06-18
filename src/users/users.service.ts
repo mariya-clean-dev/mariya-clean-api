@@ -125,6 +125,7 @@ export class UsersService {
         status: true,
         roleId: true,
         role: true,
+        priority: true,
         createdAt: true,
         updatedAt: true,
       },
