@@ -125,8 +125,12 @@ export class UsersService {
         status: true,
         roleId: true,
         role: true,
+        priority: true,
         createdAt: true,
         updatedAt: true,
+      },
+      orderBy: {
+        priority: 'asc', // or 'desc'
       },
     });
   }
@@ -234,6 +238,7 @@ export class UsersService {
         status: true,
         roleId: true,
         role: true,
+        priority: true,
         createdAt: true,
         updatedAt: true,
       },

@@ -60,6 +60,7 @@ export class SchedulerController {
   async generateSchedulesForBooking(
     @Param('bookingId') bookingId: string,
     @Body('numberOfDays') numberOfDays: number,
+    @Body('startDate') startDate: Date,
   ) {
     if (!numberOfDays || numberOfDays <= 0) {
       throw new BadRequestException(
@@ -71,6 +72,7 @@ export class SchedulerController {
       await this.schedulerService.generateSchedulesForBooking(
         bookingId,
         numberOfDays,
+        String(startDate),
       );
       return this.resposneService.successResponse(
         'Sucessfully Sheduled For Booking',
@@ -113,13 +115,43 @@ export class SchedulerController {
     );
   }
 
+  @Get('recurring-time-slots')
+  @Public()
+  async getRecurringTimeSlots(
+    @Query('startDate') startDate: string,
+    @Query('dayOfWeek') dayOfWeek: string,
+    @Query('serviceId') serviceId: string,
+    @Query('durationMins') durationMins?: string,
+    @Query('timezone') timezone?: string,
+  ) {
+    if (!startDate || !dayOfWeek || !serviceId) {
+      throw new BadRequestException(
+        'startDate, dayOfWeek and serviceId are required',
+      );
+    }
+
+    const result = await this.schedulerService.getRecurringBookingTimeSlots({
+      startDate,
+      dayOfWeek: parseInt(dayOfWeek),
+      serviceId,
+      durationMins: durationMins ? parseInt(durationMins) : undefined,
+      timezone,
+    });
+
+    return {
+      status: true,
+      message: result.message,
+      data: result.slots,
+    };
+  }
+
   @Get('time-slots')
   @Public()
   async getTimeSlots(
     @Query('date') dateRaw?: string,
     @Query('dayOfWeek') dayOfWeekRaw?: string,
     @Query('durationMins') durationMinsRaw?: string,
-    @Query('serviceId') serviceId?: string, 
+    @Query('serviceId') serviceId?: string,
   ) {
     const date = dateRaw ? new Date(dateRaw) : undefined;
     const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
