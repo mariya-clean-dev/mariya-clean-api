@@ -72,7 +72,7 @@ export class SchedulerController {
       await this.schedulerService.generateSchedulesForBooking(
         bookingId,
         numberOfDays,
-        String(startDate),
+        // String(startDate),
       );
       return this.resposneService.successResponse(
         'Sucessfully Sheduled For Booking',

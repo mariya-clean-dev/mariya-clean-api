@@ -966,7 +966,6 @@ export class SchedulerService {
   async generateSchedulesForBooking(
     bookingId: string,
     durationInDays: number = 30,
-    startDate?: string, // ISO string like "2025-07-10"
   ): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -981,74 +980,57 @@ export class SchedulerService {
 
     const { recurringType, service, areaSize, monthSchedules } = booking;
     const dayFrequency = recurringType?.dayFrequency ?? 7;
-    const template = monthSchedules.find((ms) => !ms.skip);
 
-    if (!template) return;
+    // Use first non-skipped month schedule to determine starting dayOfWeek
+    const scheduleTemplate = monthSchedules.find((ms) => !ms.skip);
+    if (!scheduleTemplate) return;
 
-    const { dayOfWeek, time } = template;
-    const timezone = 'America/New_York';
+    const { dayOfWeek, time } = scheduleTemplate;
+    const [hours, minutes] = time.split(':').map(Number);
 
-    // Validate and set the local start date
-    let localDate = startDate
-      ? DateTime.fromISO(startDate, { zone: timezone }).startOf('day')
-      : this.getNextDateByDayOfWeekLuxon(dayOfWeek, timezone);
+    let nextDate = this.getNextDateByDayOfWeek(dayOfWeek); // updated logic
+    const endDate = new Date(nextDate);
+    endDate.setDate(endDate.getDate() + durationInDays);
 
-    if (localDate.weekday % 7 !== dayOfWeek) {
-      throw new Error(
-        `Start date must be a ${this.getWeekdayName(dayOfWeek)} (dayOfWeek: ${dayOfWeek}). You provided: ${this.getWeekdayName(localDate.weekday % 7)}.`,
-      );
-    }
-
-    const endLocalDate = localDate.plus({ days: durationInDays });
-
-    while (localDate <= endLocalDate) {
-      const dateISO = localDate.toFormat('yyyy-MM-dd');
-
-      const localStart = DateTime.fromFormat(
-        `${dateISO} ${time}`,
-        'yyyy-MM-dd HH:mm',
-        {
-          zone: timezone,
-        },
-      );
-
-      const startTime = localStart.toUTC().toJSDate();
-      const duration = getDurationFromAreaSize(
-        areaSize,
-        service.durationMinutes,
-      );
-      const endTime = new Date(
-        startTime.getTime() + (duration + 30) * 60 * 1000,
-      );
-
-      const exists = await this.checkIfBookingScheduled(
+    while (nextDate <= endDate) {
+      const alreadyExists = await this.checkIfBookingScheduled(
         booking.id,
-        localStart.toJSDate(),
+        nextDate,
       );
-      if (exists) {
-        localDate = localDate.plus({ days: dayFrequency });
+      if (alreadyExists) {
+        nextDate.setDate(nextDate.getDate() + dayFrequency);
         continue;
       }
 
-      const staff = await this.findAvailableStaffSlot(
-        localStart.toJSDate(),
-        dayOfWeek,
-        startTime,
-        endTime,
+      const startDateTime = new Date(nextDate);
+      startDateTime.setUTCHours(hours, minutes, 0);
+
+      const durationMins = getDurationFromAreaSize(
+        areaSize,
+        service.durationMinutes,
+      );
+      const endDateTime = new Date(
+        startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
       );
 
-      if (staff) {
+      const availableStaff = await this.findAvailableStaffSlot(
+        nextDate,
+        dayOfWeek,
+        startDateTime,
+        endDateTime,
+      );
+      if (availableStaff) {
         await this.saveSchedule({
-          date: localDate.toISODate(),
-          startTime: formatTime(startTime),
-          endTime: formatTime(endTime),
+          date: formatDate(nextDate),
+          startTime: formatTime(startDateTime),
+          endTime: formatTime(endDateTime),
           bookingId: booking.id,
-          staffId: staff.id,
+          staffId: availableStaff.id,
           serviceId: service.id,
         });
       }
 
-      localDate = localDate.plus({ days: dayFrequency });
+      nextDate.setDate(nextDate.getDate() + dayFrequency);
     }
   }
 

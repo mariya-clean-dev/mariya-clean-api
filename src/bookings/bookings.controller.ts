@@ -146,11 +146,7 @@ export class BookingsController {
 
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
         // Generate 2 months of schedules immediately
-        await this.schedulerService.generateSchedulesForBooking(
-          booking.id,
-          30,
-          createBookingDto.startDate,
-        );
+        await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
 
         await this.mailService.sendBookingConfirmationEmail(
           user.email,
@@ -169,7 +165,7 @@ export class BookingsController {
       },
     );
   }
-
+  
   // async create(@Body() createBookingDto: CreateBookingDto) {
   //   const userData = {
   //     name: createBookingDto.name,

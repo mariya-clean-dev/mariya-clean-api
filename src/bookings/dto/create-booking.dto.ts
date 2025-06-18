@@ -136,11 +136,6 @@ export class CreateBookingDto {
   @IsOptional()
   addOnIds?: string[];
 
-  @ValidateIf((o) => o.type === ServiceType.recurring)
-  @IsISO8601()
-  @IsNotEmpty()
-  startDate?: string;
-
   //add user details
 
   @IsString()
@@ -152,10 +147,6 @@ export class CreateBookingDto {
   @IsString()
   @IsOptional()
   phone?: string;
-
-  @IsString()
-  @IsOptional()
-  timezone?: string;
 
   @ValidateNested()
   @Type(() => BookingScheduleDto)
