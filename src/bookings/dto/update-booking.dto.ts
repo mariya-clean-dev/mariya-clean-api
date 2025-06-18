@@ -1,46 +1,59 @@
 import {
-  IsString,
   IsOptional,
+  IsString,
   IsEnum,
-  IsISO8601,
+  IsNumber,
+  IsDateString,
   ValidateNested,
 } from 'class-validator';
-import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
+import { BookingStatus } from '@prisma/client';
 
-class UpdateBookingAddressDto {
-  @IsString()
+export class UpdateAddressDto {
   @IsOptional()
-  street?: string;
+  @IsString()
+  line_1?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  line_2?: string;
+
+  @IsOptional()
+  @IsString()
   city?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   state?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   zip?: string;
 
-  @IsString()
   @IsOptional()
-  specialInstructions?: string;
+  @IsString()
+  landmark?: string;
 }
 
 export class UpdateBookingDto {
-  @IsEnum(BookingStatus)
   @IsOptional()
+  @IsEnum(BookingStatus)
   status?: BookingStatus;
 
-  @IsISO8601()
   @IsOptional()
+  @IsDateString()
   scheduledDate?: string;
 
-  @ValidateNested()
-  @Type(() => UpdateBookingAddressDto)
   @IsOptional()
-  address?: UpdateBookingAddressDto;
+  @IsNumber()
+  finalAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateAddressDto)
+  address?: UpdateAddressDto;
 }

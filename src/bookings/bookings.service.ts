@@ -382,18 +382,15 @@ export class BookingsService {
     userId: string,
     role: string,
   ) {
-    // Get the booking to check permissions and current state
     const booking = await this.findOne(id, userId, role);
 
-    // Check if booking can be modified (before modification deadline)
+    // Customer rescheduling (if allowed)
     if (updateBookingDto.scheduledDate && role === 'customer') {
-      // Parse new scheduled date
       const newScheduledDate = new Date(updateBookingDto.scheduledDate);
 
-      // Update the schedules with new times
       if (booking.schedules && booking.schedules.length > 0) {
         const schedule = booking.schedules[0];
-        const serviceDuration = booking.service.durationMinutes * 60000; // Convert to milliseconds
+        const serviceDuration = booking.service.durationMinutes * 60000;
 
         await this.prisma.schedule.update({
           where: { id: schedule.id },
@@ -413,9 +410,8 @@ export class BookingsService {
       throw new ForbiddenException('Staff can only update booking status');
     }
 
-    // Handle status change
+    // Log and handle status changes
     if (updateBookingDto.status && updateBookingDto.status !== booking.status) {
-      // Log status change
       await this.prisma.bookingLog.create({
         data: {
           bookingId: id,
@@ -425,11 +421,9 @@ export class BookingsService {
         },
       });
 
-      // If staff marking as in-progress, update actual start time
       if (updateBookingDto.status === 'in_progress' && role === 'staff') {
-        // Find the schedule for this booking
-        if (booking.schedules && booking.schedules.length > 0) {
-          const schedule = booking.schedules[0];
+        const schedule = booking.schedules?.[0];
+        if (schedule) {
           await this.prisma.schedule.update({
             where: { id: schedule.id },
             data: { actualStartTime: new Date() },
@@ -437,18 +431,15 @@ export class BookingsService {
         }
       }
 
-      // If staff marking as completed, update actual end time
       if (updateBookingDto.status === 'completed' && role === 'staff') {
-        // Find the schedule for this booking
-        if (booking.schedules && booking.schedules.length > 0) {
-          const schedule = booking.schedules[0];
+        const schedule = booking.schedules?.[0];
+        if (schedule) {
           await this.prisma.schedule.update({
             where: { id: schedule.id },
             data: { actualEndTime: new Date() },
           });
         }
 
-        // Create notification for customer to leave a review
         await this.notificationsService.createNotification({
           userId: booking.userId,
           title: 'Service Completed',
@@ -460,33 +451,38 @@ export class BookingsService {
       }
     }
 
-    // Prepare data for update
+    // ✅ Update booking address (via `Address` model)
+    if (updateBookingDto.address && booking.bookingAddress?.address) {
+      await this.prisma.address.update({
+        where: { id: booking.bookingAddress.address.id },
+        data: updateBookingDto.address,
+      });
+    }
+
+    // Prepare fields for booking update
     const updateData: any = {};
 
     if (updateBookingDto.status) {
       updateData.status = updateBookingDto.status;
     }
 
-    // Handle address update if provided
-    if (updateBookingDto.address && booking.bookingAddress) {
-      await this.prisma.bookingAddress.update({
-        where: { id: booking.bookingAddress.id },
-        data: updateBookingDto.address,
-      });
+    if (updateBookingDto.finalAmount) {
+      updateData.price = updateBookingDto.finalAmount;
     }
 
-    // Update booking
+    // 👇 Add more fields as needed (admin-side editable)
+
     const updatedBooking = await this.prisma.booking.update({
       where: { id },
       data: updateData,
       include: {
-        bookingAddress: true,
+        bookingAddress: {
+          include: { address: true },
+        },
         service: true,
         schedules: true,
         bookingAddOns: {
-          include: {
-            addOn: true,
-          },
+          include: { addOn: true },
         },
       },
     });

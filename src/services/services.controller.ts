@@ -132,6 +132,8 @@ export class ServicesController {
       getPriceEstimateDto.square_feet,
       getPriceEstimateDto.no_of_rooms,
       getPriceEstimateDto.no_of_bathrooms,
+      getPriceEstimateDto.isEcoCleaning,
+      getPriceEstimateDto.materialsProvidedByClient
     );
     return this.responseService.successResponse(
       'price estimation details',
