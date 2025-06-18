@@ -626,8 +626,8 @@ export class BookingsService {
         title: notificationTitle,
         message:
           status === 'completed'
-            ? `Your booking #${id} has been completed`
-            : `Your booking #${id} has been canceled`,
+            ? `Your booking has been completed`
+            : `Your booking has been canceled`,
         notificationType: 'status_change',
         relatedBookingId: id,
       });
