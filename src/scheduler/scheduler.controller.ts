@@ -115,6 +115,36 @@ export class SchedulerController {
     );
   }
 
+  @Get('recurring-time-slots')
+  @Public()
+  async getRecurringTimeSlots(
+    @Query('startDate') startDate: string,
+    @Query('dayOfWeek') dayOfWeek: string,
+    @Query('serviceId') serviceId: string,
+    @Query('durationMins') durationMins?: string,
+    @Query('timezone') timezone?: string,
+  ) {
+    if (!startDate || !dayOfWeek || !serviceId) {
+      throw new BadRequestException(
+        'startDate, dayOfWeek and serviceId are required',
+      );
+    }
+
+    const result = await this.schedulerService.getRecurringBookingTimeSlots({
+      startDate,
+      dayOfWeek: parseInt(dayOfWeek),
+      serviceId,
+      durationMins: durationMins ? parseInt(durationMins) : undefined,
+      timezone,
+    });
+
+    return {
+      status: true,
+      message: result.message,
+      data: result.slots,
+    };
+  }
+
   @Get('time-slots')
   @Public()
   async getTimeSlots(

@@ -223,6 +223,7 @@ export class ServicesService {
         square_foot_price: true,
         room_rate: true,
         bathroom_rate: true,
+        durationMinutes: true,
       },
     });
 
@@ -286,8 +287,9 @@ export class ServicesService {
     };
 
     estimates.push(onetimeEstimate);
-
+    const totalDuration = (square_feet / 500) * service.durationMinutes;
     return {
+      totalDuration,
       baseCalculatedPrice,
       estimates,
     };

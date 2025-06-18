@@ -275,7 +275,7 @@ export class SchedulerService {
     timezone?: string;
   }) {
     const bufferMins = 30;
-    const defaultDuration = 120;
+    const defaultDuration = durationMins ? durationMins : 120;
 
     // 1. Determine target date (preserve UTC, then shift to timezone)
     let targetDate: DateTime;
@@ -1260,6 +1260,136 @@ export class SchedulerService {
     );
 
     return availableStaff || null;
+  }
+
+  async getRecurringBookingTimeSlots({
+    startDate,
+    dayOfWeek,
+    serviceId,
+    durationMins,
+    timezone = DEFAULT_TIMEZONE,
+  }: {
+    startDate: string; // "YYYY-MM-DD"
+    dayOfWeek: number; // 0-6 (Sunday to Saturday)
+    serviceId: string;
+    durationMins?: number;
+    timezone?: string;
+  }) {
+    const bufferMins = 30;
+    const defaultDuration = 120;
+    const daysToCheck = 60; // simulate 2 months
+    const interval = 30;
+    const startHour = 9;
+    const endHour = 18;
+
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+
+    const totalDuration =
+      (durationMins ?? service?.durationMinutes ?? defaultDuration) +
+      bufferMins;
+
+    const staffs = await this.prisma.user.findMany({
+      where: { role: { name: 'staff' } },
+      select: { id: true },
+    });
+
+    const targetStartDate = DateTime.fromISO(startDate, {
+      zone: timezone,
+    }).startOf('day');
+    const targetEndDate = targetStartDate.plus({ days: daysToCheck });
+
+    const allSlotsMap: Record<
+      string,
+      { time: string; isAvailable: boolean }[]
+    > = {};
+
+    for (let i = 0; i <= daysToCheck; i++) {
+      const date = targetStartDate.plus({ days: i });
+      if (date.weekday % 7 !== dayOfWeek) continue;
+
+      const dateKey = date.toFormat('yyyy-MM-dd');
+      const dailySlots: { time: string; isAvailable: boolean }[] = [];
+
+      const conflictsPerStaff: Record<
+        string,
+        { start: DateTime; end: DateTime }[]
+      > = {};
+
+      for (const staff of staffs) {
+        const [unavailabilities, schedules] = await Promise.all([
+          this.prisma.staffAvailability.findMany({
+            where: {
+              staffId: staff.id,
+              date: {
+                gte: date.toJSDate(),
+                lte: date.endOf('day').toJSDate(),
+              },
+              isAvailable: false,
+            },
+            select: { date: true, startTime: true, endTime: true },
+          }),
+          this.prisma.schedule.findMany({
+            where: {
+              staffId: staff.id,
+              startTime: {
+                gte: date.toUTC().toJSDate(),
+                lte: date.endOf('day').toUTC().toJSDate(),
+              },
+              status: { in: ['scheduled', 'rescheduled', 'in_progress'] },
+            },
+            select: { startTime: true, endTime: true },
+          }),
+        ]);
+
+        conflictsPerStaff[staff.id] = [
+          ...unavailabilities.map((u) => {
+            const local = DateTime.fromJSDate(u.date, { zone: timezone }).set({
+              hour: u.startTime.getHours(),
+              minute: u.startTime.getMinutes(),
+            });
+            const end = local.set({
+              hour: u.endTime.getHours(),
+              minute: u.endTime.getMinutes(),
+            });
+            return { start: local.toUTC(), end: end.toUTC() };
+          }),
+          ...schedules.map((s) => ({
+            start: DateTime.fromJSDate(s.startTime).toUTC(),
+            end: DateTime.fromJSDate(s.endTime).toUTC(),
+          })),
+        ];
+      }
+
+      let current = date.set({ hour: startHour, minute: 0 });
+      while (current.hour < endHour) {
+        const endTime = current.plus({ minutes: totalDuration });
+
+        const isAvailable = staffs.some((staff) => {
+          const conflicts = conflictsPerStaff[staff.id] || [];
+          return !conflicts.some(
+            (conflict) =>
+              current.toUTC() < conflict.end &&
+              endTime.toUTC() > conflict.start,
+          );
+        });
+
+        dailySlots.push({
+          time: current.toFormat('HH:mm'),
+          isAvailable,
+        });
+
+        current = current.plus({ minutes: interval });
+      }
+
+      allSlotsMap[dateKey] = dailySlots;
+    }
+
+    return {
+      message: 'Recurring booking time slots',
+      slots: allSlotsMap,
+    };
   }
 }
 
