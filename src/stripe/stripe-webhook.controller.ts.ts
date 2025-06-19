@@ -93,7 +93,28 @@ export class StripeWebhookController {
 
   private async handlePaymentIntentSucceeded(paymentIntent: any) {
     console.log('handlePaymentIntentSucceeded');
-    // Find the related booking by metadata
+
+    const stripePaymentId = paymentIntent.id;
+
+    // Step 1: Try to update existing pending transaction (from schedule completion)
+    const updatedTx = await this.prisma.transaction.updateMany({
+      where: {
+        stripePaymentId,
+        status: TransactionStatus.pending,
+      },
+      data: {
+        status: TransactionStatus.successful,
+      },
+    });
+
+    if (updatedTx.count > 0) {
+      console.log(
+        `✅ Pending transaction updated for paymentIntent: ${stripePaymentId}`,
+      );
+      return;
+    }
+
+    // Step 2: Fallback to booking metadata-based handling
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
       const booking = await this.prisma.booking.findUnique({
@@ -108,11 +129,11 @@ export class StripeWebhookController {
       });
 
       if (booking) {
-        // Create a transaction record
+        // Create a new transaction (only if not already created by scheduler logic)
         await this.prisma.transaction.create({
           data: {
             bookingId,
-            stripePaymentId: paymentIntent.id,
+            stripePaymentId: stripePaymentId,
             stripeInvoiceId: paymentIntent.invoice || null,
             amount: paymentIntent.amount / 100, // Convert from cents
             currency: paymentIntent.currency,
@@ -131,7 +152,6 @@ export class StripeWebhookController {
 
         await this.shedulerService.generateSchedulesForBooking(booking.id);
 
-        // Notify the customer
         await this.notificationsService.createNotification({
           userId: booking.userId,
           title: 'Payment Successful',
@@ -139,6 +159,10 @@ export class StripeWebhookController {
           notificationType: 'payment_confirmation',
           relatedBookingId: bookingId,
         });
+
+        console.log(
+          `✅ New transaction created and schedule generated for booking: ${bookingId}`,
+        );
       }
     }
   }
@@ -176,41 +200,68 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentFailed(paymentIntent: any) {
-    // Find the related booking by metadata
-    if (paymentIntent.metadata?.bookingId) {
-      const bookingId = paymentIntent.metadata.bookingId;
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { service: true },
-      });
+    const stripePaymentId = paymentIntent.id;
+    const bookingId = paymentIntent.metadata?.bookingId;
 
-      if (booking) {
-        // Create a failed transaction record
-        await this.prisma.transaction.create({
-          data: {
-            bookingId,
-            stripePaymentId: paymentIntent.id,
-            stripeInvoiceId: paymentIntent.invoice || null,
-            amount: paymentIntent.amount / 100, // Convert from cents
-            currency: paymentIntent.currency,
-            status: TransactionStatus.failed,
-            paymentMethod: paymentIntent.payment_method_types[0] || 'card',
-            transactionType: 'payment',
-            failureReason:
-              paymentIntent.last_payment_error?.message || 'Payment failed',
-          },
-        });
-
-        // Notify the customer
-        await this.notificationsService.createNotification({
-          userId: booking.userId,
-          title: 'Payment Failed',
-          message: `Your payment for ${booking.service.name} has failed. Reason: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
-          notificationType: 'payment_confirmation',
-          relatedBookingId: bookingId,
-        });
-      }
+    if (!bookingId) {
+      console.warn('No bookingId found in paymentIntent metadata');
+      return;
     }
+
+    // Step 1: Update the pending transaction to failed
+    await this.prisma.transaction.updateMany({
+      where: {
+        stripePaymentId,
+        status: TransactionStatus.pending,
+      },
+      data: {
+        status: TransactionStatus.failed,
+        failureReason:
+          paymentIntent.last_payment_error?.message || 'Payment failed',
+      },
+    });
+
+    // Step 2: Get the booking with its schedule
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        service: true,
+        schedules: {
+          where: {
+            status: 'completed', // Only update schedules marked completed
+          },
+        },
+      },
+    });
+
+    // Step 3: Update related schedule (if completed) to 'payment_failed'
+    if (booking?.schedules?.length > 0) {
+      const schedule = booking.schedules[0]; // Assuming one schedule
+      await this.prisma.schedule.update({
+        where: { id: schedule.id },
+        data: {
+          status: 'payment_failed' as any, // cast if not in enum
+        },
+      });
+      console.log(
+        `🛑 Schedule ${schedule.id} status updated to 'payment_failed'`,
+      );
+    }
+
+    // Step 4: Notify the customer
+    if (booking) {
+      await this.notificationsService.createNotification({
+        userId: booking.userId,
+        title: 'Payment Failed',
+        message: `Your payment for ${booking.service.name} has failed. Reason: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
+        notificationType: 'payment_confirmation',
+        relatedBookingId: bookingId,
+      });
+    }
+
+    console.warn(
+      `❌ Payment failed and schedule marked for booking: ${bookingId}`,
+    );
   }
 
   private async handleSubscriptionCreated(subscription: any) {

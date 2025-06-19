@@ -40,11 +40,13 @@ import { SchedulerService } from 'src/scheduler/scheduler.service';
 import { MailService } from 'src/mailer/mailer.service';
 import { stringify } from 'querystring';
 import { RescheduleDto } from './dto/reschedule.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
 export class BookingsController {
   constructor(
+    private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
     private readonly responseService: ResponseService,
     private readonly usersService: UsersService,
@@ -58,6 +60,31 @@ export class BookingsController {
   @Post()
   @Public()
   async create(@Body() createBookingDto: CreateBookingDto) {
+    console.log('📥 Incoming Booking DTO:', createBookingDto);
+
+    if (createBookingDto.type === ServiceType.recurring) {
+      const service = await this.prisma.service.findUnique({
+        where: { id: createBookingDto.serviceId },
+      });
+
+      if (!service) throw new BadRequestException('Invalid service ID');
+
+      const durationMins =
+        (createBookingDto.areaSize / 500) * service.durationMinutes;
+
+      const isAvailable =
+        await this.schedulerService.isStaffAvailableOnDayAndTime(
+          createBookingDto.schedule.dayOfWeek,
+          createBookingDto.schedule.time,
+          durationMins,
+        );
+      if (!isAvailable) {
+        throw new ConflictException(
+          'No staff is available for the requested time. Please choose a different slot.',
+        );
+      }
+    }
+
     const userData = {
       name: createBookingDto.name,
       email: createBookingDto.email,
@@ -66,8 +93,9 @@ export class BookingsController {
     };
 
     const user = await this.usersService.findOrCreateUser(userData);
+    console.log('👤 User resolved/created:', user.id);
 
-    // Validation
+    // 🧪 Validate required fields
     if (
       createBookingDto.type === ServiceType.one_time &&
       !createBookingDto.date
@@ -84,20 +112,16 @@ export class BookingsController {
       );
     }
 
-    // Create Booking
+    // 🧾 Create Booking
     const booking = await this.bookingsService.create(
       createBookingDto,
       user.id,
     );
+    console.log('📌 Booking created:', booking.id);
 
-    // Stripe payment setup if required
+    // 💳 Stripe (only if payment method is online)
     let stripeData = null;
     if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
-      // const customer = await this.stripeService.createCustomer(
-      //   createBookingDto.email,
-      //   createBookingDto.name,
-      // );
-
       const session = await this.stripeService.createCardSetupSession({
         customerId: user.stripeCustomerId,
         successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
@@ -115,18 +139,19 @@ export class BookingsController {
       });
 
       stripeData = { checkoutUrl: session.url };
+      console.log('🧾 Stripe session created:', session.url);
     }
 
-    // Booking type-specific logic
+    // 📅 Booking Type Specific Logic
     if (createBookingDto.type === ServiceType.one_time) {
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
-        // Generate single schedule for one-time booking
-
+        console.log('📆 Creating one-time schedule...');
         await this.schedulerService.generateOneTimeScheduleForBooking(
           booking.id,
           createBookingDto.date,
           createBookingDto.time,
         );
+        console.log('✅ One-time schedule generated');
         await this.mailService.sendBookingConfirmationEmail(
           user.email,
           user.name,
@@ -135,18 +160,24 @@ export class BookingsController {
         );
       }
     } else if (createBookingDto.type === ServiceType.recurring) {
-      // Create MonthSchedule
+      const { dayOfWeek, time } = createBookingDto.schedule;
+      console.log(
+        `📆 Creating recurring MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}`,
+      );
+
       const monthSchedule = {
         bookingId: booking.id,
-        dayOfWeek: createBookingDto.schedule.dayOfWeek,
-        time: createBookingDto.schedule.time,
+        dayOfWeek,
+        time,
       };
 
       await this.schedulerService.createMonthSchedules([monthSchedule]);
+      console.log('📌 MonthSchedule created');
 
       if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
-        // Generate 2 months of schedules immediately
+        console.log('⚙️ Generating recurring schedules...');
         await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
+        console.log('✅ Recurring schedules generated');
 
         await this.mailService.sendBookingConfirmationEmail(
           user.email,
@@ -165,7 +196,7 @@ export class BookingsController {
       },
     );
   }
-  
+
   // async create(@Body() createBookingDto: CreateBookingDto) {
   //   const userData = {
   //     name: createBookingDto.name,

@@ -25,7 +25,7 @@ import utc from 'dayjs/plugin/utc';
 import { BookingsService } from 'src/bookings/bookings.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { StripeService } from 'src/stripe/stripe.service';
-import { DateTime } from 'luxon';
+import { DateTime, Interval } from 'luxon';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -255,10 +255,18 @@ export class SchedulerService {
   //   }
 
   //   return slots;
-  // }
-  private parseTime(date: Date) {
-    // Extract UTC hours and minutes from Date
-    return { h: date.getUTCHours(), m: date.getUTCMinutes() };
+  parseTime(time: string | Date): { h: number; m: number } {
+    if (time instanceof Date) {
+      return {
+        h: time.getUTCHours(),
+        m: time.getUTCMinutes(),
+      };
+    }
+    if (typeof time === 'string' && time.includes(':')) {
+      const [h, m] = time.split(':').map(Number);
+      return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
+    }
+    return { h: 0, m: 0 };
   }
 
   async getTimeSlots({
@@ -266,155 +274,157 @@ export class SchedulerService {
     dayOfWeek,
     durationMins,
     serviceId,
-    timezone = DEFAULT_TIMEZONE,
   }: {
     date?: Date;
     dayOfWeek?: number;
     durationMins?: number;
     serviceId?: string;
-    timezone?: string;
   }) {
     const bufferMins = 30;
-    const defaultDuration = durationMins ? durationMins : 120;
+    const defaultDuration = 120;
 
-    // 1. Determine target date (preserve UTC, then shift to timezone)
+    // 1. Determine target date
     let targetDate: DateTime;
     if (date) {
-      const dateUtc = DateTime.fromJSDate(date).setZone(timezone, {
-        keepLocalTime: true,
-      });
-      targetDate = dateUtc.setZone(timezone).startOf('day');
+      targetDate = DateTime.fromJSDate(date).toUTC().startOf('day');
     } else if (dayOfWeek !== undefined) {
-      targetDate = DateTime.now().setZone(timezone).startOf('day');
-      while (targetDate.weekday % 7 !== dayOfWeek) {
+      targetDate = DateTime.utc().startOf('day');
+
+      // Skip today even if it matches
+      const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Luxon uses 1=Mon ... 7=Sun
+      do {
         targetDate = targetDate.plus({ days: 1 });
-      }
+      } while (targetDate.weekday !== adjustedDayOfWeek);
     } else {
       throw new BadRequestException(
         'Either date or dayOfWeek must be provided',
       );
     }
+    console.log('🗓️ Target Date (UTC):', targetDate.toISO());
 
-    console.log(`📅 Local date: ${targetDate.toISO()}`);
-    console.log(
-      `🌐 UTC range: ${targetDate.toUTC().toISO()} → ${targetDate.endOf('day').toUTC().toISO()}`,
-    );
-
-    // 2. Duration with buffer
+    // 2. Resolve total duration
     let totalDuration = durationMins;
     if (!totalDuration && serviceId) {
       const service = await this.prisma.service.findUnique({
         where: { id: serviceId },
       });
-      totalDuration = service?.durationMinutes ?? defaultDuration;
+      if (service?.durationMinutes) {
+        totalDuration = service.durationMinutes;
+      }
     }
+    if (!totalDuration) totalDuration = defaultDuration;
     totalDuration += bufferMins;
-
-    console.log(`🕐 Total slot duration (with buffer): ${totalDuration}`);
+    console.log(`⏱️ Total Duration (with buffer): ${totalDuration} mins`);
 
     // 3. Get staff list
     const staffs = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' } },
+      where: { role: { name: 'staff' }, status: 'active' },
       select: { id: true },
     });
+    const staffIds = staffs.map((s) => s.id);
+    console.log('👥 Staff IDs:', staffIds);
 
-    console.log(`👥 Total staff: ${staffs.length}`);
+    // 4. Build unavailable map
+    const unavailableMap: Record<string, { start: DateTime; end: DateTime }[]> =
+      {};
 
-    // 4. Get conflicts for each staff
-    const staffConflictMap: Record<
-      string,
-      { start: DateTime; end: DateTime }[]
-    > = {};
+    for (const staffId of staffIds) {
+      unavailableMap[staffId] = [];
 
-    for (const staff of staffs) {
-      const [unavailabilities, schedules] = await Promise.all([
-        this.prisma.staffAvailability.findMany({
-          where: {
-            staffId: staff.id,
-            date: {
-              gte: targetDate.toJSDate(),
-              lte: targetDate.endOf('day').toJSDate(),
-            },
-            isAvailable: false,
+      const availability = await this.prisma.staffAvailability.findMany({
+        where: {
+          staffId,
+          date: {
+            gte: targetDate.toJSDate(),
+            lte: targetDate.endOf('day').toJSDate(),
           },
-          select: { date: true, startTime: true, endTime: true },
-        }),
-        this.prisma.schedule.findMany({
-          where: {
-            staffId: staff.id,
-            startTime: {
-              gte: targetDate.toUTC().toJSDate(),
-              lte: targetDate.endOf('day').toUTC().toJSDate(),
-            },
-            status: { in: ['scheduled', 'rescheduled', 'in_progress'] },
+          isAvailable: false,
+        },
+      });
+
+      for (const entry of availability) {
+        const { h: sh, m: sm } = this.parseTime(entry.startTime);
+        const { h: eh, m: em } = this.parseTime(entry.endTime);
+
+        const start = DateTime.fromJSDate(entry.date, { zone: 'utc' }).set({
+          hour: sh,
+          minute: sm,
+        });
+        const end = DateTime.fromJSDate(entry.date, { zone: 'utc' }).set({
+          hour: eh,
+          minute: em,
+        });
+
+        unavailableMap[staffId].push({ start, end });
+      }
+
+      const schedules = await this.prisma.schedule.findMany({
+        where: {
+          staffId,
+          startTime: {
+            gte: targetDate.toJSDate(),
+            lte: targetDate.endOf('day').toJSDate(),
           },
-          select: { startTime: true, endTime: true },
-        }),
-      ]);
+          status: 'scheduled',
+        },
+      });
 
-      const conflicts = [
-        ...unavailabilities.map((u) => {
-          const localDate = DateTime.fromJSDate(u.date, { zone: timezone });
-          const start = localDate
-            .set({
-              hour: u.startTime.getHours(),
-              minute: u.startTime.getMinutes(),
-            })
-            .setZone('utc');
-          const end = localDate
-            .set({ hour: u.endTime.getHours(), minute: u.endTime.getMinutes() })
-            .setZone('utc');
+      for (const sch of schedules) {
+        const start = DateTime.fromJSDate(sch.startTime).toUTC();
+        const end = DateTime.fromJSDate(sch.endTime).toUTC();
+        unavailableMap[staffId].push({ start, end });
+      }
 
-          console.log(`🔒 Unavailable UTC: ${start.toISO()} → ${end.toISO()}`);
-          return { start, end };
-        }),
-        ...schedules.map((s) => {
-          const start = DateTime.fromJSDate(s.startTime).toUTC();
-          const end = DateTime.fromJSDate(s.endTime).toUTC();
-          console.log(`📅 Scheduled: ${start.toISO()} → ${end.toISO()}`);
-          return { start, end };
-        }),
-      ];
-
-      staffConflictMap[staff.id] = conflicts;
-      console.log(`⚠️ Conflicts for staff ${staff.id}:`, conflicts);
+      console.log(
+        `❌ Unavailable ranges for staff ${staffId}:`,
+        unavailableMap[staffId].map((r) => ({
+          start: r.start.toFormat('HH:mm'),
+          end: r.end.toFormat('HH:mm'),
+        })),
+      );
     }
 
-    // 5. Generate slots in user's timezone
+    // 5. Generate time slots
     const startHour = 9;
     const endHour = 18;
     const interval = 30;
-    const slots: { time: string; isAvailable: boolean }[] = [];
+    const result: { time: string; isAvailable: boolean }[] = [];
 
-    let current = targetDate.set({ hour: startHour, minute: 0 });
+    let current = targetDate.set({ hour: startHour, minute: 0, second: 0 });
 
     while (current.hour < endHour) {
-      const endTime = current.plus({ minutes: totalDuration });
+      const end = current.plus({ minutes: totalDuration });
 
-      const isAvailable = staffs.some((staff) => {
-        const conflicts = staffConflictMap[staff.id] || [];
-        const hasConflict = conflicts.some(
-          (range) =>
-            current.toUTC() < range.end && endTime.toUTC() > range.start,
+      // ✅ FIXED: Slot is only available if at least one staff has no overlaps
+      const slotIsAvailable = staffIds.some((staffId) => {
+        const hasOverlap = unavailableMap[staffId].some(
+          ({ start, end: busyEnd }) => {
+            const overlap = current < busyEnd && end > start;
+            if (overlap) {
+              console.log(
+                `🔴 Conflict: Slot ${current.toFormat('HH:mm')}–${end.toFormat('HH:mm')} overlaps with ${start.toFormat('HH:mm')}–${busyEnd.toFormat('HH:mm')} for staff ${staffId}`,
+              );
+            }
+            return overlap;
+          },
         );
-        return !hasConflict;
+
+        return !hasOverlap;
       });
 
       console.log(
-        `🕑 Slot: ${current.toUTC().toISO()} → ${endTime.toUTC().toISO()} - ${
-          isAvailable ? '✅ Available' : '❌ Unavailable'
-        }`,
+        `🕒 Slot: ${current.toFormat('HH:mm')} - ${end.toFormat('HH:mm')}, Available: ${slotIsAvailable}`,
       );
 
-      slots.push({
-        time: current.toFormat('HH:mm'), // local timezone format
-        isAvailable,
+      result.push({
+        time: current.toFormat('HH:mm'),
+        isAvailable: slotIsAvailable,
       });
 
       current = current.plus({ minutes: interval });
     }
 
-    return slots;
+    return result;
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
@@ -512,7 +522,7 @@ export class SchedulerService {
       }
 
       try {
-        // Charge the saved payment method
+        // Create payment intent (charge the saved card)
         const paymentIntent = await this.stripeService.chargeSavedCard({
           customerId: stripeCustomerId,
           amount: amountInCents,
@@ -520,20 +530,20 @@ export class SchedulerService {
           paymentMethodId,
         });
 
-        // Mark the schedule as paid
+        // Update the schedule as completed
         updatedSchedule = await this.prisma.schedule.update({
           where: { id },
           data: { status: ScheduleStatus.completed },
         });
 
-        // Record transaction
+        // Record transaction as pending
         await this.prisma.transaction.create({
           data: {
             bookingId: booking.id,
             stripePaymentId: paymentIntent.id,
-            amount: new Prisma.Decimal(amountInCents / 100), // dollars
+            amount: new Prisma.Decimal(amountInCents / 100),
             currency,
-            status: 'successful',
+            status: 'pending', // Initially pending
             paymentMethod: 'card',
             transactionType: 'charge',
           },
@@ -555,7 +565,7 @@ export class SchedulerService {
         throw new BadRequestException('Stripe payment failed: ' + err.message);
       }
     } else {
-      // Just update status normally if not online payment
+      // For cash or cancellation, update status directly
       updatedSchedule = await this.prisma.schedule.update({
         where: { id },
         data: { status },
@@ -563,7 +573,7 @@ export class SchedulerService {
     }
 
     if (isCompleted && !isOnlinePayment) {
-      // Create a manual successful transaction record (e.g., cash payment)
+      // Manually create successful transaction for cash payment
       await this.prisma.transaction.create({
         data: {
           bookingId: booking.id,
@@ -576,7 +586,7 @@ export class SchedulerService {
       });
     }
 
-    // Complete or cancel one-time bookings
+    // Handle one-time booking completion or cancellation logic
     if (booking.type === 'one_time' && (isCompleted || isCanceled)) {
       await this.bookingService.cancelorComplete(
         booking.id,
@@ -1041,6 +1051,25 @@ export class SchedulerService {
     return now.plus({ days: daysToAdd });
   }
 
+  getNextDateByDayOfWeek(targetDay: number): Date {
+    const today = new Date();
+
+    // Normalize Sunday=0 to Sunday=7
+    const currentDay = today.getDay() === 0 ? 7 : today.getDay();
+
+    let daysToAdd = (targetDay - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // always move forward
+
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + daysToAdd);
+
+    console.log(
+      `🧠 [getNextDateByDayOfWeek] Target: ${targetDay}, Today: ${currentDay}, Next: ${nextDate.toDateString()}`,
+    );
+
+    return nextDate;
+  }
+
   private getWeekdayName(day: number): string {
     const names = [
       'Sunday',
@@ -1055,18 +1084,6 @@ export class SchedulerService {
   }
 
   // Helper functions (for context):
-  private getNextDateByDayOfWeek(dayOfWeek: number): Date {
-    const today = new Date();
-    const currentDay = today.getDay(); // Sunday = 0, Monday = 1, ..., Saturday = 6
-
-    // Calculate how many days to add
-    const daysToAdd = (dayOfWeek + 7 - currentDay) % 7 || 7;
-
-    const nextDate = new Date(today);
-    nextDate.setDate(today.getDate() + daysToAdd);
-    nextDate.setHours(0, 0, 0, 0);
-    return nextDate;
-  }
 
   async checkIfBookingScheduled(bookingId: string, date: Date) {
     const startOfDay = new Date(date);
@@ -1156,9 +1173,6 @@ export class SchedulerService {
       scheduleData.staff = { connect: { id: staffId } };
     }
 
-    // Create schedule
-    await this.prisma.schedule.create({ data: scheduleData });
-
     // Update staff availability if applicable
     if (staffId) {
       try {
@@ -1185,10 +1199,49 @@ export class SchedulerService {
             isAvailable: false,
           },
         });
+
+        // Create schedule
+        await this.prisma.schedule.create({ data: scheduleData });
       } catch (error) {
         console.warn('Availability upsert failed:', error.message);
       }
     }
+  }
+
+  async isStaffAvailableOnDayAndTime(
+    dayOfWeek: number, // 1 = Monday, 7 = Sunday
+    time: string, // e.g., "10:00"
+    durationMins: number,
+  ): Promise<boolean> {
+    const [hour, minute] = time.split(':').map(Number);
+
+    // 🔁 Normalize today to 1–7 (Mon–Sun)
+    const today = new Date();
+    const currentDay = today.getDay() === 0 ? 7 : today.getDay();
+
+    let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // always move to next week if same day
+
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + daysToAdd);
+    targetDate.setHours(hour - 5, minute - 30, 0, 0); // Subtract IST offset manually
+
+    const start = new Date(targetDate);
+    const end = new Date(
+      start.getTime() + durationMins * 60 * 1000 + 30 * 60 * 1000,
+    ); // buffer
+
+    console.log('🕒 Final UTC ISO start:', start.toISOString());
+    console.log('🕒 Final UTC ISO end:', end.toISOString());
+
+    const availableStaff = await this.findAvailableStaffSlot(
+      start,
+      dayOfWeek,
+      start,
+      end,
+    );
+
+    return !!availableStaff;
   }
 
   async findAvailableStaffSlot(
@@ -1197,22 +1250,26 @@ export class SchedulerService {
     startTime: Date,
     endTime: Date,
   ) {
-    function toComparableTime(dt: Date) {
-      const timeStr = dt.toISOString().slice(11, 19); // "HH:mm:ss"
-      return new Date(`1970-01-01T${timeStr}Z`);
-    }
+    const requestStart = startTime;
+    const requestEnd = endTime;
 
-    const startComparable = toComparableTime(startTime);
-    const endComparable = toComparableTime(endTime);
-
+    // 🧑‍💻 Step 1: Get all active staff sorted by priority
     const allStaffs = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' } },
+      where: {
+        role: { name: 'staff' },
+        status: 'active',
+      },
       orderBy: { priority: 'asc' },
       select: { id: true, name: true, priority: true },
     });
 
+    // 📆 Step 2: Get unavailable time slots from staffAvailability
     const availabilities = await this.prisma.staffAvailability.findMany({
-      where: date ? { date } : { dayOfWeek },
+      where: date
+        ? {
+            date: new Date(date.toISOString().split('T')[0] + 'T00:00:00.000Z'),
+          }
+        : { dayOfWeek },
       select: {
         staffId: true,
         startTime: true,
@@ -1221,26 +1278,46 @@ export class SchedulerService {
       },
     });
 
-    const unavailableStaffIds = new Set<string>();
-
-    for (const availability of availabilities) {
-      if (!availability.isAvailable) {
-        const availStart = toComparableTime(availability.startTime);
-        const availEnd = toComparableTime(availability.endTime);
-
-        const overlaps =
-          availStart < endComparable && availEnd > startComparable;
-
-        if (overlaps) {
-          unavailableStaffIds.add(availability.staffId);
+    const unavailableByAvailability = new Set<string>();
+    for (const a of availabilities) {
+      if (!a.isAvailable) {
+        const start = a.startTime;
+        const end = a.endTime;
+        if (start < requestEnd && end > requestStart) {
+          unavailableByAvailability.add(a.staffId);
         }
       }
     }
 
-    const availableStaff = allStaffs.find(
-      (staff) => !unavailableStaffIds.has(staff.id),
+    // 📦 Step 3: Get already booked schedules
+    const conflictingSchedules = await this.prisma.schedule.findMany({
+      where: {
+        startTime: { lt: requestEnd },
+        endTime: { gt: requestStart },
+      },
+      select: {
+        staffId: true,
+      },
+    });
+
+    const unavailableBySchedule = new Set<string>(
+      conflictingSchedules.map((s) => s.staffId),
     );
 
+    // ❌ Union of both unavailable staff sets
+    const completelyUnavailable = new Set([
+      ...unavailableByAvailability,
+      ...unavailableBySchedule,
+    ]);
+
+    // ✅ Step 4: Return first available staff by priority
+    const availableStaff = allStaffs.find(
+      (staff) => !completelyUnavailable.has(staff.id),
+    );
+
+    console.log(
+      `✅ Available staff selected: ${availableStaff?.name ?? 'None'}`,
+    );
     return availableStaff || null;
   }
 
