@@ -921,8 +921,8 @@ export class SchedulerService {
 
   async generateOneTimeScheduleForBooking(
     bookingId: string,
-    date: Date, // exact date (local or UTC) passed in
-    time: string, // e.g. "10:00"
+    date: string | Date, // Accept both
+    time: string,
   ): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -935,18 +935,22 @@ export class SchedulerService {
 
     const timezone = 'America/New_York';
 
+    // ✅ Normalize date
+    const normalizedDate = date instanceof Date ? date : new Date(date);
+
+    // Create localized datetime from date + time
     const localStart = DateTime.fromISO(
-      `${date.toISOString().split('T')[0]}T${time}`,
-      {
-        zone: timezone,
-      },
+      `${normalizedDate.toISOString().split('T')[0]}T${time}`,
+      { zone: timezone },
     );
+
     const startDateTime = localStart.toUTC().toJSDate();
 
     const durationMins = getDurationFromAreaSize(
       booking.areaSize,
       booking.service.durationMinutes,
     );
+
     const endDateTime = new Date(
       startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
     );
@@ -954,21 +958,25 @@ export class SchedulerService {
     const dayOfWeek = startDateTime.getUTCDay();
 
     const availableStaff = await this.findAvailableStaffSlot(
-      startDateTime,
+      startDateTime, // ✅ precise date-time
       dayOfWeek,
       startDateTime,
       endDateTime,
     );
 
-    console.log(startDateTime, endDateTime, availableStaff || 'No staff');
+    console.log('📅 One-time schedule:', {
+      bookingId,
+      start: startDateTime.toISOString(),
+      end: endDateTime.toISOString(),
+      staff: availableStaff?.id || 'none',
+    });
 
-    // Even if no staff is available, save the schedule without staff assignment
     await this.saveSchedule({
       date: formatDate(startDateTime),
       startTime: formatTime(startDateTime),
       endTime: formatTime(endDateTime),
       bookingId: booking.id,
-      staffId: availableStaff?.id ?? null, // <== assign null if no staff
+      staffId: availableStaff?.id ?? null,
       serviceId: booking.service.id,
     });
   }
