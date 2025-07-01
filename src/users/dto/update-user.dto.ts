@@ -34,7 +34,7 @@ export class UpdateUserDto {
   @IsOptional()
   roleId?: string;
 
-    @IsInt()
-    @IsOptional()
-    priority?: number;
+  @IsInt()
+  @IsOptional()
+  priority?: number;
 }
