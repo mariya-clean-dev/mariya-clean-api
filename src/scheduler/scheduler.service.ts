@@ -26,6 +26,7 @@ import { BookingsService } from 'src/bookings/bookings.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { StripeService } from 'src/stripe/stripe.service';
 import { DateTime, Interval } from 'luxon';
+import { scheduled } from 'rxjs';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -128,6 +129,7 @@ export class SchedulerService {
             select: {
               id: true,
               status: true,
+              paymentMethod: true,
               customer: {
                 select: {
                   id: true,
@@ -517,6 +519,7 @@ export class SchedulerService {
 
     const isCompleted = status === 'completed';
     const isCanceled = status === 'canceled';
+    const isMissed = status === 'missed';
     const isOnlinePayment = booking.paymentMethod === 'online';
 
     let updatedSchedule;
@@ -540,6 +543,12 @@ export class SchedulerService {
           amount: amountInCents,
           currency,
           paymentMethodId,
+          metadata: {
+            bookingId: booking.id,
+            scheduleId: scheduleExist.id,
+            userId,
+            triggeredBy: role,
+          },
         });
 
         // Update the schedule as completed
@@ -572,6 +581,11 @@ export class SchedulerService {
             transactionType: 'charge',
             failureReason: err.message,
           },
+        });
+
+        await this.prisma.schedule.update({
+          where: { id },
+          data: { status: 'payment_failed' },
         });
 
         throw new BadRequestException('Stripe payment failed: ' + err.message);

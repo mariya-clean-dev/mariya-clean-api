@@ -96,7 +96,7 @@ export class StripeWebhookController {
 
     const stripePaymentId = paymentIntent.id;
 
-    // Step 1: Try to update existing pending transaction (from schedule completion)
+    // Step 1: Try to update existing pending transaction
     const updatedTx = await this.prisma.transaction.updateMany({
       where: {
         stripePaymentId,
@@ -107,14 +107,20 @@ export class StripeWebhookController {
       },
     });
 
-    if (updatedTx.count > 0) {
+    if (updatedTx.count > 0 && paymentIntent.metadata?.scheduleId) {
+      // Update the associated schedule status to payment_success
+      await this.prisma.schedule.update({
+        where: { id: paymentIntent.metadata.scheduleId },
+        data: { status: 'payment_success' },
+      });
+
       console.log(
-        `✅ Pending transaction updated for paymentIntent: ${stripePaymentId}`,
+        `✅ Schedule ${paymentIntent.metadata.scheduleId} marked as payment_success`,
       );
       return;
     }
 
-    // Step 2: Fallback to booking metadata-based handling
+    // Step 2: Fallback – handle first-time payments (booking-based)
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
       const booking = await this.prisma.booking.findUnique({
@@ -122,20 +128,17 @@ export class StripeWebhookController {
         include: {
           service: true,
           customer: true,
-          bookingAddress: {
-            include: { address: true },
-          },
+          bookingAddress: { include: { address: true } },
         },
       });
 
       if (booking) {
-        // Create a new transaction (only if not already created by scheduler logic)
         await this.prisma.transaction.create({
           data: {
             bookingId,
-            stripePaymentId: stripePaymentId,
+            stripePaymentId,
             stripeInvoiceId: paymentIntent.invoice || null,
-            amount: paymentIntent.amount / 100, // Convert from cents
+            amount: paymentIntent.amount / 100,
             currency: paymentIntent.currency,
             status: TransactionStatus.successful,
             paymentMethod: paymentIntent.payment_method_types[0] || 'card',
@@ -202,6 +205,7 @@ export class StripeWebhookController {
   private async handlePaymentIntentFailed(paymentIntent: any) {
     const stripePaymentId = paymentIntent.id;
     const bookingId = paymentIntent.metadata?.bookingId;
+    const scheduleId = paymentIntent.metadata?.scheduleId;
 
     if (!bookingId) {
       console.warn('No bookingId found in paymentIntent metadata');
@@ -221,34 +225,43 @@ export class StripeWebhookController {
       },
     });
 
-    // Step 2: Get the booking with its schedule
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        service: true,
-        schedules: {
-          where: {
-            status: 'completed', // Only update schedules marked completed
+    // Step 2: Update specific schedule to payment_failed
+    if (scheduleId) {
+      await this.prisma.schedule.update({
+        where: { id: scheduleId },
+        data: { status: 'payment_failed' },
+      });
+      console.log(`🛑 Schedule ${scheduleId} marked as payment_failed`);
+    } else {
+      // Fallback: update first completed schedule
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          service: true,
+          schedules: {
+            where: { status: 'completed' },
           },
         },
-      },
-    });
-
-    // Step 3: Update related schedule (if completed) to 'payment_failed'
-    if (booking?.schedules?.length > 0) {
-      const schedule = booking.schedules[0]; // Assuming one schedule
-      await this.prisma.schedule.update({
-        where: { id: schedule.id },
-        data: {
-          status: 'payment_failed' as any, // cast if not in enum
-        },
       });
-      console.log(
-        `🛑 Schedule ${schedule.id} status updated to 'payment_failed'`,
-      );
+
+      if (booking?.schedules?.length > 0) {
+        const fallbackSchedule = booking.schedules[0];
+        await this.prisma.schedule.update({
+          where: { id: fallbackSchedule.id },
+          data: { status: 'payment_failed' },
+        });
+        console.log(
+          `🛑 Fallback: Schedule ${fallbackSchedule.id} marked as payment_failed`,
+        );
+      }
     }
 
-    // Step 4: Notify the customer
+    // Step 3: Notify the customer
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { service: true },
+    });
+
     if (booking) {
       await this.notificationsService.createNotification({
         userId: booking.userId,
