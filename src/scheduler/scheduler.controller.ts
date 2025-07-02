@@ -72,7 +72,7 @@ export class SchedulerController {
       await this.schedulerService.generateSchedulesForBooking(
         bookingId,
         numberOfDays,
-        String(startDate),
+        // String(startDate),
       );
       return this.resposneService.successResponse(
         'Sucessfully Sheduled For Booking',
@@ -151,7 +151,7 @@ export class SchedulerController {
     @Query('date') dateRaw?: string,
     @Query('dayOfWeek') dayOfWeekRaw?: string,
     @Query('durationMins') durationMinsRaw?: string,
-    @Query('serviceId') serviceId?: string,
+    @Query('planId') planId?: string,
   ) {
     const date = dateRaw ? new Date(dateRaw) : undefined;
     const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
@@ -173,11 +173,15 @@ export class SchedulerController {
       );
     }
 
+    if (!durationMins) {
+      throw new BadRequestException('durationMins is required');
+    }
+
     const slots = await this.schedulerService.getTimeSlots({
       date: hasDate ? date : undefined,
       dayOfWeek: hasDayOfWeek ? dayOfWeek : undefined,
       durationMins,
-      serviceId,
+      planId,
     });
 
     return this.resposneService.successResponse('Time slots list', slots);

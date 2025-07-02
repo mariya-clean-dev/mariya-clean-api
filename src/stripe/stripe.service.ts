@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 
@@ -136,18 +136,31 @@ export class StripeService {
 
   async chargeSavedCard(params: {
     customerId: string;
-    amount: number; // in cents
+    amount: number;
     currency: string;
     paymentMethodId: string;
+    metadata?: Record<string, string>;
   }) {
-    return await this.stripeClient.paymentIntents.create({
-      amount: params.amount,
-      currency: params.currency,
-      customer: params.customerId,
-      payment_method: params.paymentMethodId,
-      off_session: true,
-      confirm: true,
-    });
+    try {
+      return await this.stripeClient.paymentIntents.create({
+        amount: params.amount,
+        currency: params.currency,
+        customer: params.customerId,
+        payment_method: params.paymentMethodId,
+        off_session: true,
+        confirm: true,
+        metadata: params.metadata || {},
+      });
+    } catch (error) {
+      console.error('Stripe chargeSavedCard failed:', {
+        code: error.code,
+        message: error.message,
+        type: error.type,
+      });
+
+      // You could throw a custom exception here
+      throw new BadRequestException(`Stripe payment failed: ${error.message}`);
+    }
   }
 
   async createCheckoutSession({
@@ -298,5 +311,9 @@ export class StripeService {
       signature,
       webhookSecret,
     );
+  }
+
+  async retrieveSetupIntent(setupIntentId: string) {
+    return this.stripeClient.setupIntents.retrieve(setupIntentId);
   }
 }

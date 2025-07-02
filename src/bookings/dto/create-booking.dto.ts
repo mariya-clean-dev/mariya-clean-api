@@ -17,17 +17,17 @@ import {
 import { PaymentMethodEnum, ServiceType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
-export class BookingScheduleDto {
-  // @IsInt()
-  // weekOfMonth: number;
+// export class BookingScheduleDto {
+//   // @IsInt()
+//   // weekOfMonth: number;
 
-  @IsInt()
-  dayOfWeek: number;
+//   @IsInt()
+//   dayOfWeek: number;
 
-  @IsString()
-  @IsNotEmpty()
-  time: string;
-}
+//   @IsString()
+//   @IsNotEmpty()
+//   time: string;
+// }
 
 class BookingAddressDto {
   @IsString()
@@ -135,12 +135,6 @@ export class CreateBookingDto {
   @IsArray()
   @IsOptional()
   addOnIds?: string[];
-
-  @ValidateIf((o) => o.type === ServiceType.recurring)
-  @IsISO8601()
-  @IsNotEmpty()
-  startDate?: string;
-
   //add user details
 
   @IsString()
@@ -153,14 +147,10 @@ export class CreateBookingDto {
   @IsOptional()
   phone?: string;
 
-  @IsString()
-  @IsOptional()
-  timezone?: string;
-
-  @ValidateNested()
-  @Type(() => BookingScheduleDto)
-  @IsOptional()
-  schedule?: BookingScheduleDto;
+  // @ValidateNested()
+  // @Type(() => BookingScheduleDto)
+  // @IsOptional()
+  // schedule?: BookingScheduleDto;
 
   // @ValidateNested()
   // @Type(() => BookingScheduleDto)
