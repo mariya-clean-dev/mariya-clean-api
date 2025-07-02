@@ -92,7 +92,7 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentSucceeded(paymentIntent: any) {
-    console.log('handlePaymentIntentSucceeded');
+    console.log('✅ Stripe event: setup_intent.succeeded');
 
     const stripePaymentId = paymentIntent.id;
 
