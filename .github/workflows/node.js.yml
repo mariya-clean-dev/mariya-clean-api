@@ -3,7 +3,7 @@ name: Node.js CI
 on:
   push:
     branches:
-      - main
+      - production
 
 jobs:
   build-and-deploy:
@@ -32,7 +32,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/mariya-cleaning/mariya-clean-api
-            git pull origin main
+            git pull origin production
             npm install
             npx prisma migrate deploy || echo "Migration failed or not needed"
             npx prisma generate
