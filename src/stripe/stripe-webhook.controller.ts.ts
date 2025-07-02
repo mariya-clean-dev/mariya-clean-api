@@ -378,6 +378,47 @@ export class StripeWebhookController {
   private async handleCheckoutSessionCompleted(session: any) {
     const { bookingId, date, time, userId } = session.metadata || {};
 
+    // 🧾 Handle sessions in setup mode (used to save card only)
+    if (session.mode === 'setup') {
+      const setupIntentId = session.setup_intent;
+      if (!setupIntentId) {
+        console.warn('⚠️ No setup intent found on session');
+        return;
+      }
+
+      const setupIntent =
+        await this.stripeService.retrieveSetupIntent(setupIntentId);
+
+      // 🔐 Extract payment method safely (string or object)
+      const paymentMethodId =
+        typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id;
+
+      const customerId = setupIntent.customer;
+
+      if (paymentMethodId && customerId && userId) {
+        try {
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { stripePaymentId: paymentMethodId },
+          });
+
+          console.log(
+            `💾 Payment method ${paymentMethodId} saved for user ${userId}`,
+          );
+        } catch (err) {
+          console.error(
+            `❌ Failed to save payment method for user ${userId}:`,
+            err,
+          );
+        }
+      }
+
+      return; // ⛔ Skip schedule generation for setup-only flows
+    }
+
+    // 🧾 Handle sessions in payment mode (booking-based)
     if (!bookingId) {
       throw new Error('Missing bookingId in metadata.');
     }
@@ -397,18 +438,14 @@ export class StripeWebhookController {
       throw new Error('Booking not found after payment.');
     }
 
-    // Mark payment as successful
-    // await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
-    //   stripeSessionId: session.id, // or any identifier you want to store
-    // });
-
-    // Generate schedules
+    // 🗓️ Generate schedules based on booking type
     if (booking.type === 'recurring') {
       await this.shedulerService.generateSchedulesForBooking(booking.id);
     } else if (booking.type === 'one_time') {
       if (!date || !time) {
         throw new Error('Date and time are required for one-time booking.');
       }
+
       await this.shedulerService.generateOneTimeScheduleForBooking(
         booking.id,
         date,
@@ -418,7 +455,7 @@ export class StripeWebhookController {
       throw new Error(`Unhandled booking type: ${booking.type}`);
     }
 
-    // Send booking confirmation email
+    // 📧 Send confirmation email
     await this.mailService.sendBookingConfirmationEmail(
       booking.customer.email,
       booking.customer.name,
@@ -426,7 +463,7 @@ export class StripeWebhookController {
       booking.bookingAddress.address.line_1,
     );
 
-    // Send notification
+    // 🔔 Send notification
     await this.notificationsService.createNotification({
       userId,
       title: 'Booking Confirmed',

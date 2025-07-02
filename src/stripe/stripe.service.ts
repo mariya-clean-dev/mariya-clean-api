@@ -312,4 +312,8 @@ export class StripeService {
       webhookSecret,
     );
   }
+
+  async retrieveSetupIntent(setupIntentId: string) {
+    return this.stripeClient.setupIntents.retrieve(setupIntentId);
+  }
 }
