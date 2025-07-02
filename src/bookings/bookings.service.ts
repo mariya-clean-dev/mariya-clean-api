@@ -178,13 +178,11 @@ export class BookingsService {
   async findAll(role: string, userId: string, param: any) {
     let where = param;
 
-    // Filter bookings based on user role
     if (role === 'customer') {
       where = { userId };
     } else if (role === 'staff') {
       where = { assignedStaffId: userId };
     }
-    // Admin sees all bookings (no filter)
 
     const bookings = await this.prisma.booking.findMany({
       where,
@@ -197,18 +195,7 @@ export class BookingsService {
             phone: true,
           },
         },
-        // assignedStaff:
-        //   role === 'admin' || role === 'customer'
-        //     ? {
-        //         select: {
-        //           id: true,
-        //           name: true,
-        //           email: true,
-        //           phone: true,
-        //         },
-        //       }
-        //     : undefined,
-        // service: true,
+        service: true,
         monthSchedules: true,
         bookingAddress: {
           include: {
@@ -249,9 +236,14 @@ export class BookingsService {
         }
       }
 
+      const squareFeet = booking.areaSize ?? 500; // Default if missing
+      const serviceDuration = booking.service?.durationMinutes ?? 60; // Default if missing
+      const durationMins = (squareFeet / 500) * serviceDuration;
+
       return {
         ...booking,
         nextMonthSchedule: nextSchedule,
+        durationMins: Math.ceil(durationMins), // Round up if needed
       };
     });
 
