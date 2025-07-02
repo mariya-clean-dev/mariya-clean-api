@@ -414,8 +414,6 @@ export class StripeWebhookController {
           );
         }
       }
-
-      return; // ⛔ Skip schedule generation for setup-only flows
     }
 
     // 🧾 Handle sessions in payment mode (booking-based)
