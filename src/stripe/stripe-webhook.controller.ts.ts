@@ -92,8 +92,35 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentSucceeded(paymentIntent: any) {
-    console.log('handlePaymentIntentSucceeded');
-    // Find the related booking by metadata
+    console.log('✅ Stripe event: setup_intent.succeeded');
+
+    const stripePaymentId = paymentIntent.id;
+
+    // Step 1: Try to update existing pending transaction
+    const updatedTx = await this.prisma.transaction.updateMany({
+      where: {
+        stripePaymentId,
+        status: TransactionStatus.pending,
+      },
+      data: {
+        status: TransactionStatus.successful,
+      },
+    });
+
+    if (updatedTx.count > 0 && paymentIntent.metadata?.scheduleId) {
+      // Update the associated schedule status to payment_success
+      await this.prisma.schedule.update({
+        where: { id: paymentIntent.metadata.scheduleId },
+        data: { status: 'payment_success' },
+      });
+
+      console.log(
+        `✅ Schedule ${paymentIntent.metadata.scheduleId} marked as payment_success`,
+      );
+      return;
+    }
+
+    // Step 2: Fallback – handle first-time payments (booking-based)
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
       const booking = await this.prisma.booking.findUnique({
@@ -101,20 +128,17 @@ export class StripeWebhookController {
         include: {
           service: true,
           customer: true,
-          bookingAddress: {
-            include: { address: true },
-          },
+          bookingAddress: { include: { address: true } },
         },
       });
 
       if (booking) {
-        // Create a transaction record
         await this.prisma.transaction.create({
           data: {
             bookingId,
-            stripePaymentId: paymentIntent.id,
+            stripePaymentId,
             stripeInvoiceId: paymentIntent.invoice || null,
-            amount: paymentIntent.amount / 100, // Convert from cents
+            amount: paymentIntent.amount / 100,
             currency: paymentIntent.currency,
             status: TransactionStatus.successful,
             paymentMethod: paymentIntent.payment_method_types[0] || 'card',
@@ -131,7 +155,6 @@ export class StripeWebhookController {
 
         await this.shedulerService.generateSchedulesForBooking(booking.id);
 
-        // Notify the customer
         await this.notificationsService.createNotification({
           userId: booking.userId,
           title: 'Payment Successful',
@@ -139,6 +162,10 @@ export class StripeWebhookController {
           notificationType: 'payment_confirmation',
           relatedBookingId: bookingId,
         });
+
+        console.log(
+          `✅ New transaction created and schedule generated for booking: ${bookingId}`,
+        );
       }
     }
   }
@@ -176,41 +203,78 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentFailed(paymentIntent: any) {
-    // Find the related booking by metadata
-    if (paymentIntent.metadata?.bookingId) {
-      const bookingId = paymentIntent.metadata.bookingId;
+    const stripePaymentId = paymentIntent.id;
+    const bookingId = paymentIntent.metadata?.bookingId;
+    const scheduleId = paymentIntent.metadata?.scheduleId;
+
+    if (!bookingId) {
+      console.warn('No bookingId found in paymentIntent metadata');
+      return;
+    }
+
+    // Step 1: Update the pending transaction to failed
+    await this.prisma.transaction.updateMany({
+      where: {
+        stripePaymentId,
+        status: TransactionStatus.pending,
+      },
+      data: {
+        status: TransactionStatus.failed,
+        failureReason:
+          paymentIntent.last_payment_error?.message || 'Payment failed',
+      },
+    });
+
+    // Step 2: Update specific schedule to payment_failed
+    if (scheduleId) {
+      await this.prisma.schedule.update({
+        where: { id: scheduleId },
+        data: { status: 'payment_failed' },
+      });
+      console.log(`🛑 Schedule ${scheduleId} marked as payment_failed`);
+    } else {
+      // Fallback: update first completed schedule
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
-        include: { service: true },
+        include: {
+          service: true,
+          schedules: {
+            where: { status: 'completed' },
+          },
+        },
       });
 
-      if (booking) {
-        // Create a failed transaction record
-        await this.prisma.transaction.create({
-          data: {
-            bookingId,
-            stripePaymentId: paymentIntent.id,
-            stripeInvoiceId: paymentIntent.invoice || null,
-            amount: paymentIntent.amount / 100, // Convert from cents
-            currency: paymentIntent.currency,
-            status: TransactionStatus.failed,
-            paymentMethod: paymentIntent.payment_method_types[0] || 'card',
-            transactionType: 'payment',
-            failureReason:
-              paymentIntent.last_payment_error?.message || 'Payment failed',
-          },
+      if (booking?.schedules?.length > 0) {
+        const fallbackSchedule = booking.schedules[0];
+        await this.prisma.schedule.update({
+          where: { id: fallbackSchedule.id },
+          data: { status: 'payment_failed' },
         });
-
-        // Notify the customer
-        await this.notificationsService.createNotification({
-          userId: booking.userId,
-          title: 'Payment Failed',
-          message: `Your payment for ${booking.service.name} has failed. Reason: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
-          notificationType: 'payment_confirmation',
-          relatedBookingId: bookingId,
-        });
+        console.log(
+          `🛑 Fallback: Schedule ${fallbackSchedule.id} marked as payment_failed`,
+        );
       }
     }
+
+    // Step 3: Notify the customer
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { service: true },
+    });
+
+    if (booking) {
+      await this.notificationsService.createNotification({
+        userId: booking.userId,
+        title: 'Payment Failed',
+        message: `Your payment for ${booking.service.name} has failed. Reason: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
+        notificationType: 'payment_confirmation',
+        relatedBookingId: bookingId,
+      });
+    }
+
+    console.warn(
+      `❌ Payment failed and schedule marked for booking: ${bookingId}`,
+    );
   }
 
   private async handleSubscriptionCreated(subscription: any) {
@@ -314,6 +378,44 @@ export class StripeWebhookController {
   private async handleCheckoutSessionCompleted(session: any) {
     const { bookingId, date, time, userId } = session.metadata || {};
 
+    // 🧾 Handle sessions in setup mode (save card)
+    if (session.mode === 'setup') {
+      const setupIntentId = session.setup_intent;
+      if (!setupIntentId) {
+        console.warn('⚠️ No setup intent found on session');
+      } else {
+        const setupIntent =
+          await this.stripeService.retrieveSetupIntent(setupIntentId);
+
+        const paymentMethodId =
+          typeof setupIntent.payment_method === 'string'
+            ? setupIntent.payment_method
+            : setupIntent.payment_method?.id;
+
+        const customerId = setupIntent.customer;
+
+        if (paymentMethodId && customerId && userId) {
+          try {
+            await this.prisma.user.update({
+              where: { id: userId },
+              data: { stripePaymentId: paymentMethodId },
+            });
+
+            console.log(
+              `💾 Payment method ${paymentMethodId} saved for user ${userId}`,
+            );
+          } catch (err) {
+            console.error(
+              `❌ Failed to save payment method for user ${userId}:`,
+              err,
+            );
+          }
+        }
+      }
+      // ⛔ DO NOT RETURN HERE — allow schedule generation to continue
+    }
+
+    // ✅ Handle schedule generation
     if (!bookingId) {
       throw new Error('Missing bookingId in metadata.');
     }
@@ -333,18 +435,13 @@ export class StripeWebhookController {
       throw new Error('Booking not found after payment.');
     }
 
-    // Mark payment as successful
-    // await this.paymentsService.markAsSuccessfulByBookingId(bookingId, {
-    //   stripeSessionId: session.id, // or any identifier you want to store
-    // });
-
-    // Generate schedules
     if (booking.type === 'recurring') {
       await this.shedulerService.generateSchedulesForBooking(booking.id);
     } else if (booking.type === 'one_time') {
       if (!date || !time) {
         throw new Error('Date and time are required for one-time booking.');
       }
+
       await this.shedulerService.generateOneTimeScheduleForBooking(
         booking.id,
         date,
@@ -354,7 +451,7 @@ export class StripeWebhookController {
       throw new Error(`Unhandled booking type: ${booking.type}`);
     }
 
-    // Send booking confirmation email
+    // 📧 Send confirmation email
     await this.mailService.sendBookingConfirmationEmail(
       booking.customer.email,
       booking.customer.name,
@@ -362,7 +459,7 @@ export class StripeWebhookController {
       booking.bookingAddress.address.line_1,
     );
 
-    // Send notification
+    // 🔔 Send notification
     await this.notificationsService.createNotification({
       userId,
       title: 'Booking Confirmed',
