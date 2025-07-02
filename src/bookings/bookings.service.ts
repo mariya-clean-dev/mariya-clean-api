@@ -234,7 +234,8 @@ export class BookingsService {
 
       for (const schedule of booking.schedules) {
         if (
-          schedule.status == 'scheduled' &&
+          schedule.status === 'scheduled' &&
+          !schedule.isSkipped &&
           schedule.startTime &&
           new Date(schedule.startTime) > new Date()
         ) {

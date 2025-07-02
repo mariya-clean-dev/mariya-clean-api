@@ -115,7 +115,7 @@ export class SchedulerService {
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.schedule.findMany({
-        where,
+        where: { ...where, isSkipped: false },
         include: {
           staff: {
             select: {
