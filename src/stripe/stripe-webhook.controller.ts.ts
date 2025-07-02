@@ -378,45 +378,44 @@ export class StripeWebhookController {
   private async handleCheckoutSessionCompleted(session: any) {
     const { bookingId, date, time, userId } = session.metadata || {};
 
-    // 🧾 Handle sessions in setup mode (used to save card only)
+    // 🧾 Handle sessions in setup mode (save card)
     if (session.mode === 'setup') {
       const setupIntentId = session.setup_intent;
       if (!setupIntentId) {
         console.warn('⚠️ No setup intent found on session');
-        return;
-      }
+      } else {
+        const setupIntent =
+          await this.stripeService.retrieveSetupIntent(setupIntentId);
 
-      const setupIntent =
-        await this.stripeService.retrieveSetupIntent(setupIntentId);
+        const paymentMethodId =
+          typeof setupIntent.payment_method === 'string'
+            ? setupIntent.payment_method
+            : setupIntent.payment_method?.id;
 
-      // 🔐 Extract payment method safely (string or object)
-      const paymentMethodId =
-        typeof setupIntent.payment_method === 'string'
-          ? setupIntent.payment_method
-          : setupIntent.payment_method?.id;
+        const customerId = setupIntent.customer;
 
-      const customerId = setupIntent.customer;
+        if (paymentMethodId && customerId && userId) {
+          try {
+            await this.prisma.user.update({
+              where: { id: userId },
+              data: { stripePaymentId: paymentMethodId },
+            });
 
-      if (paymentMethodId && customerId && userId) {
-        try {
-          await this.prisma.user.update({
-            where: { id: userId },
-            data: { stripePaymentId: paymentMethodId },
-          });
-
-          console.log(
-            `💾 Payment method ${paymentMethodId} saved for user ${userId}`,
-          );
-        } catch (err) {
-          console.error(
-            `❌ Failed to save payment method for user ${userId}:`,
-            err,
-          );
+            console.log(
+              `💾 Payment method ${paymentMethodId} saved for user ${userId}`,
+            );
+          } catch (err) {
+            console.error(
+              `❌ Failed to save payment method for user ${userId}:`,
+              err,
+            );
+          }
         }
       }
+      // ⛔ DO NOT RETURN HERE — allow schedule generation to continue
     }
 
-    // 🧾 Handle sessions in payment mode (booking-based)
+    // ✅ Handle schedule generation
     if (!bookingId) {
       throw new Error('Missing bookingId in metadata.');
     }
@@ -436,7 +435,6 @@ export class StripeWebhookController {
       throw new Error('Booking not found after payment.');
     }
 
-    // 🗓️ Generate schedules based on booking type
     if (booking.type === 'recurring') {
       await this.shedulerService.generateSchedulesForBooking(booking.id);
     } else if (booking.type === 'one_time') {
