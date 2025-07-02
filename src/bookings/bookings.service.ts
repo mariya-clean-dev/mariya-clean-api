@@ -22,12 +22,12 @@ export class BookingsService {
   async create(createBookingDto: CreateBookingDto, userId: string) {
     let updatedPrice = createBookingDto.price;
 
-    if (createBookingDto.materialProvided == true) {
-      updatedPrice = updatedPrice * 0.95; // 5% discount
-    }
-    if (createBookingDto.isEco == true) {
-      updatedPrice = updatedPrice * 1.05; // 5% surcharge
-    }
+    // if (createBookingDto.materialProvided == true) {
+    //   updatedPrice = updatedPrice * 0.95; // 5% discount
+    // }
+    // if (createBookingDto.isEco == true) {
+    //   updatedPrice = updatedPrice * 1.05; // 5% surcharge
+    // }
 
     // Check if service exists
     const service = await this.prisma.service.findUnique({
