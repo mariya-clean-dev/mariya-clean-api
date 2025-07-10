@@ -921,15 +921,13 @@ export class SchedulerService {
             0,
           );
 
-          const rawDuration = getDurationFromAreaSize(
+          const durationMins = getDurationFromAreaSize(
             booking.areaSize,
             booking.service.durationMinutes,
           );
 
-          const roundedDuration = Math.ceil(rawDuration / 30) * 30;
-
           const endDateTime = new Date(
-            startDateTime.getTime() + (roundedDuration + 30) * 60 * 1000, 
+            startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
           );
 
           const availableStaff = await this.findAvailableStaffSlot(
