@@ -929,7 +929,7 @@ export class SchedulerService {
           const roundedDuration = Math.ceil(rawDuration / 30) * 30;
 
           const endDateTime = new Date(
-            startDateTime.getTime() + roundedDuration * 60 * 1000,
+            startDateTime.getTime() + (roundedDuration + 30) * 60 * 1000, 
           );
 
           const availableStaff = await this.findAvailableStaffSlot(
