@@ -865,7 +865,7 @@ export class SchedulerService {
     this.logger.log('Running Auto-Scheduler...');
 
     const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + 45);
+    targetDate.setDate(today.getDate() + 60);
 
     await this.generateSchedulesForDate(today, targetDate);
 
@@ -879,12 +879,9 @@ export class SchedulerService {
     for (
       let currentDate = new Date(startDate);
       currentDate <= new Date(endDate);
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+      currentDate.setDate(currentDate.getDate() + 1)
     ) {
-      //const week = getNthWeekdayOfMonth(currentDate);
       const day = currentDate.getDay();
-
-      // console.log(currentDate, day, week);
 
       const bookings = await this.prisma.booking.findMany({
         where: {
@@ -898,6 +895,7 @@ export class SchedulerService {
         },
         include: { monthSchedules: true, service: true },
       });
+
       for (const booking of bookings) {
         const schedulesForDay = booking.monthSchedules.filter(
           (ms: any) => ms.dayOfWeek === day && !ms.skip,
@@ -912,15 +910,26 @@ export class SchedulerService {
 
         for (const ms of schedulesForDay) {
           const [hours, minutes] = ms.time.split(':').map(Number);
-          const startDateTime = new Date(currentDate);
-          startDateTime.setUTCHours(hours, minutes, 0);
 
-          const durationMins = getDurationFromAreaSize(
+          const startDateTime = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            currentDate.getDate(),
+            hours,
+            minutes,
+            0,
+            0,
+          );
+
+          const rawDuration = getDurationFromAreaSize(
             booking.areaSize,
             booking.service.durationMinutes,
           );
+
+          const roundedDuration = Math.ceil(rawDuration / 30) * 30;
+
           const endDateTime = new Date(
-            startDateTime.getTime() + durationMins * 60 * 1000,
+            startDateTime.getTime() + roundedDuration * 60 * 1000,
           );
 
           const availableStaff = await this.findAvailableStaffSlot(
@@ -933,12 +942,14 @@ export class SchedulerService {
           if (!availableStaff) continue;
 
           await this.saveSchedule({
-            date: formatDate(currentDate),
-            startTime: formatTime(startDateTime),
-            endTime: formatTime(endDateTime),
+            date: startDateTime.toISOString().slice(0, 10),
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
             bookingId: booking.id,
             staffId: availableStaff.id,
             serviceId: booking.service.id,
+            timezone: 'UTC',
+            isSkipped: false,
           });
         }
       }
