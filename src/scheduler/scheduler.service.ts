@@ -276,10 +276,14 @@ export class SchedulerService {
   }) {
     const bufferMins = 30;
     const totalDuration = durationMins + bufferMins;
+    const stepMinutes = 30;
+    const startHour = 9;
+    const endHour = 19;
+
     const today = new Date();
-    const todayStart = new Date(today.setHours(0, 0, 0, 0));
-    const maxStartDate = new Date(todayStart);
-    maxStartDate.setDate(todayStart.getDate() + 21);
+    today.setHours(0, 0, 0, 0);
+    const maxStartDate = new Date(today);
+    maxStartDate.setDate(today.getDate() + 21);
 
     let targetDate: Date;
     if (date) {
@@ -287,7 +291,7 @@ export class SchedulerService {
       targetDate.setHours(0, 0, 0, 0);
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-      targetDate = new Date(todayStart);
+      targetDate = new Date(today);
       while ((targetDate.getDay() || 7) !== adjustedDay) {
         targetDate.setDate(targetDate.getDate() + 1);
       }
@@ -302,9 +306,9 @@ export class SchedulerService {
     });
     const staffIds = staffList.map((s) => s.id);
 
-    const stepMinutes = 30;
+    // Prepare time slots
     const allSlots = [];
-    for (let hour = 9; hour < 19; hour++) {
+    for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += stepMinutes) {
         allSlots.push({
           time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
@@ -313,50 +317,27 @@ export class SchedulerService {
       }
     }
 
+    // Get plan frequency
     let selectedPlanFrequency: number | null = null;
     if (planId) {
       const selectedPlan = await this.prisma.recurringType.findUnique({
         where: { id: planId },
         select: { dayFrequency: true },
       });
-      if (selectedPlan) {
-        selectedPlanFrequency = selectedPlan.dayFrequency;
-      }
+      selectedPlanFrequency = selectedPlan?.dayFrequency ?? null;
     }
 
+    // Get all unavailable blocks for each staff
     const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
-
-    const allSchedules = await this.prisma.schedule.findMany({
-      where: {
-        status: 'scheduled',
-        startTime: {
-          gte: todayStart,
-          lte: new Date(maxStartDate.getTime() + 24 * 60 * 60 * 1000),
-        },
-      },
-      select: {
-        staffId: true,
-        startTime: true,
-        endTime: true,
-      },
-    });
-
-    for (const sch of allSchedules) {
-      if (!unavailableMap[sch.staffId]) unavailableMap[sch.staffId] = [];
-      unavailableMap[sch.staffId].push({
-        start: sch.startTime,
-        end: sch.endTime,
-      });
-    }
 
     for (const slot of allSlots) {
       const [h, m] = slot.time.split(':').map(Number);
       const baseStart = new Date(targetDate);
       baseStart.setHours(h, m, 0, 0);
-
       const baseEnd = new Date(baseStart.getTime() + totalDuration * 60 * 1000);
-      if (baseEnd.getHours() >= 19) {
-        console.log(`⛔ Slot ${slot.time} skipped - ends after 19:00`);
+
+      if (baseEnd.getHours() >= endHour) {
+        console.log(`⛔ Slot ${slot.time} skipped - ends after ${endHour}:00`);
         slot.isAvailable = false;
         continue;
       }
@@ -384,7 +365,7 @@ export class SchedulerService {
               const overlap = !(end <= busyStart || start >= busyEnd);
               if (overlap) {
                 console.log(
-                  `❌ Staff ${staffId} busy at ${slot.time} | ${start.toISOString()} - ${end.toISOString()}`,
+                  `❌ Staff ${staffId} busy at ${slot.time} | ${start.toLocaleString()} - ${end.toLocaleString()}`,
                 );
               }
               return overlap;
@@ -416,7 +397,7 @@ export class SchedulerService {
         this.prisma.staffAvailability.findMany({
           where: {
             staffId,
-            date: date,
+            date,
             isAvailable: false,
           },
         }),
@@ -431,19 +412,12 @@ export class SchedulerService {
       ]);
 
       for (const entry of unavailable) {
-        const [sh, sm] = entry.startTime
-          .toTimeString()
-          .slice(0, 5)
-          .split(':')
-          .map(Number);
-        const [eh, em] = entry.endTime
-          .toTimeString()
-          .slice(0, 5)
-          .split(':')
-          .map(Number);
+        const [sh, sm] = entry.startTime.toTimeString().split(':').map(Number);
+        const [eh, em] = entry.endTime.toTimeString().split(':').map(Number);
 
         const start = new Date(entry.date);
         start.setHours(sh, sm, 0, 0);
+
         const end = new Date(entry.date);
         end.setHours(eh, em, 0, 0);
 
