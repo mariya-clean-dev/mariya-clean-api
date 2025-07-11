@@ -353,21 +353,21 @@ export class SchedulerService {
         pseudoScheduleDates.push(baseStart);
       }
 
-      const conflicts = pseudoScheduleDates.some((dt) => {
-        const pseudoStart = dt;
-        const pseudoEnd = pseudoStart.plus({ minutes: totalDuration });
+      // ✅ Updated logic to consider all staff availability
+      slot.isAvailable = staffIds.some((staffId) => {
+        return pseudoScheduleDates.every((dt) => {
+          const start = dt;
+          const end = dt.plus({ minutes: totalDuration });
 
-        return allSchedules.some((s) => {
-          return Interval.fromDateTimes(pseudoStart, pseudoEnd).overlaps(
-            Interval.fromDateTimes(
-              DateTime.fromJSDate(s.startTime),
-              DateTime.fromJSDate(s.endTime),
+          const busyIntervals = unavailableMap[staffId] || [];
+
+          return !busyIntervals.some(({ start: busyStart, end: busyEnd }) =>
+            Interval.fromDateTimes(busyStart, busyEnd).overlaps(
+              Interval.fromDateTimes(start, end),
             ),
           );
         });
       });
-
-      slot.isAvailable = !conflicts;
     }
 
     return allSlots;
