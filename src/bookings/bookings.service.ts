@@ -580,16 +580,35 @@ export class BookingsService {
     // Get the booking to check permissions
     const booking = await this.findOne(id, userId);
 
-    // Check if booking can be canceled or completed
+    // Prevent duplicate cancellation/completion
     if (['completed', 'canceled'].includes(booking.status)) {
       throw new ForbiddenException(`Booking is already ${booking.status}`);
+    }
+
+    // If canceling, cancel all future schedules
+    if (status === 'canceled') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const canceledSchedules = await this.prisma.schedule.updateMany({
+        where: {
+          bookingId: id,
+          startTime: {
+            gte: today.toISOString().slice(0, 10), // assuming date is stored as string 'YYYY-MM-DD'
+          },
+        },
+        data: {
+          isSkipped: true,
+          status: 'canceled', // Optional: if you have a `status` field on schedules
+        },
+      });
     }
 
     // Update booking status
     const updatedBooking = await this.prisma.booking.update({
       where: { id },
       data: {
-        status: status, // Use the passed status
+        status,
         bookingLogs: {
           create: {
             status,
@@ -604,13 +623,15 @@ export class BookingsService {
       },
     });
 
-    const notificationTitle = `Booking ${status === 'completed' ? 'Completed' : 'Canceled'}`;
+    const notificationTitle = `Booking ${
+      status === 'completed' ? 'Completed' : 'Canceled'
+    }`;
     const notificationMessage =
       status === 'completed'
         ? `Booking #${id} has been marked as completed`
         : `Booking #${id} has been canceled`;
 
-    // Notify staff if assigned
+    // Notify assigned staff
     if (booking.assignedStaffId) {
       await this.notificationsService.createNotification({
         userId: booking.assignedStaffId,
@@ -621,7 +642,7 @@ export class BookingsService {
       });
     }
 
-    // If not canceled/completed by customer, notify customer
+    // Notify customer if updated by staff/admin
     if (role !== 'customer') {
       await this.notificationsService.createNotification({
         userId: booking.userId,
