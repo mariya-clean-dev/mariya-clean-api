@@ -411,6 +411,7 @@ export class SchedulerService {
         }),
       ]);
 
+      // Handle staffAvailability as naive local time
       for (const entry of unavailable) {
         const [sh, sm] = entry.startTime.toTimeString().split(':').map(Number);
         const [eh, em] = entry.endTime.toTimeString().split(':').map(Number);
@@ -424,8 +425,30 @@ export class SchedulerService {
         map[staffId].push({ start, end });
       }
 
+      // ⚠️ Fix scheduled times — interpret DB values as local time
       for (const sch of schedules) {
-        map[staffId].push({ start: sch.startTime, end: sch.endTime });
+        const dbStart = sch.startTime;
+        const dbEnd = sch.endTime;
+
+        const start = new Date(
+          dbStart.getFullYear(),
+          dbStart.getMonth(),
+          dbStart.getDate(),
+          dbStart.getHours(),
+          dbStart.getMinutes(),
+          dbStart.getSeconds(),
+        );
+
+        const end = new Date(
+          dbEnd.getFullYear(),
+          dbEnd.getMonth(),
+          dbEnd.getDate(),
+          dbEnd.getHours(),
+          dbEnd.getMinutes(),
+          dbEnd.getSeconds(),
+        );
+
+        map[staffId].push({ start, end });
       }
     }
 
