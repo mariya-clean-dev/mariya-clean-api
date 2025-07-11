@@ -281,7 +281,7 @@ export class SchedulerService {
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'local' }).startOf('day');
+      targetDate = DateTime.fromJSDate(date).startOf('day'); // ✅ no `.toLocal()`
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
@@ -418,11 +418,11 @@ export class SchedulerService {
           entry.endTime.toTimeString().slice(0, 5),
         );
 
-        const start = DateTime.fromJSDate(entry.date, { zone: 'local' }).set({
+        const start = DateTime.fromJSDate(entry.date).set({
           hour: sh,
           minute: sm,
         });
-        const end = DateTime.fromJSDate(entry.date, { zone: 'local' }).set({
+        const end = DateTime.fromJSDate(entry.date).set({
           hour: eh,
           minute: em,
         });
@@ -431,8 +431,8 @@ export class SchedulerService {
       }
 
       for (const sch of schedules) {
-        const start = DateTime.fromJSDate(sch.startTime, { zone: 'local' });
-        const end = DateTime.fromJSDate(sch.endTime, { zone: 'local' });
+        const start = DateTime.fromJSDate(sch.startTime); // ✅ no .toLocal()
+        const end = DateTime.fromJSDate(sch.endTime); // ✅ no .toLocal()
         map[staffId].push({ start, end });
       }
     }
