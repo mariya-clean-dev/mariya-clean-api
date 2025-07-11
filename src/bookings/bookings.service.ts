@@ -588,18 +588,19 @@ export class BookingsService {
     // If canceling, cancel all future schedules
     if (status === 'canceled') {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0); // Normalize to start of day
 
       const canceledSchedules = await this.prisma.schedule.updateMany({
         where: {
           bookingId: id,
           startTime: {
-            gte: today.toISOString().slice(0, 10), // assuming date is stored as string 'YYYY-MM-DD'
+            gte: today,
           },
+          status: 'scheduled',
         },
         data: {
           isSkipped: true,
-          status: 'canceled', // Optional: if you have a `status` field on schedules
+          status: 'canceled',
         },
       });
     }
