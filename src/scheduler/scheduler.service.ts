@@ -276,12 +276,14 @@ export class SchedulerService {
   }) {
     const bufferMins = 30;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.utc().startOf('day');
+    const today = DateTime.local().startOf('day');
     const maxStartDate = today.plus({ days: 21 });
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date).startOf('day');
+      targetDate = DateTime.fromJSDate(date, { zone: 'Asia/Kolkata' }).startOf(
+        'day',
+      );
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
@@ -323,21 +325,6 @@ export class SchedulerService {
 
     const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
 
-    const allSchedules = await this.prisma.schedule.findMany({
-      where: {
-        status: 'scheduled',
-        startTime: {
-          gte: today.toJSDate(),
-          lte: maxStartDate.endOf('day').toJSDate(),
-        },
-      },
-      select: {
-        staffId: true,
-        startTime: true,
-        endTime: true,
-      },
-    });
-
     for (const slot of allSlots) {
       const [h, m] = slot.time.split(':').map(Number);
       const baseStart = targetDate.set({ hour: h, minute: m });
@@ -353,21 +340,22 @@ export class SchedulerService {
         pseudoScheduleDates.push(baseStart);
       }
 
-      const conflicts = pseudoScheduleDates.some((dt) => {
-        const pseudoStart = dt;
-        const pseudoEnd = pseudoStart.plus({ minutes: totalDuration });
+      slot.isAvailable = staffIds.some((staffId) => {
+        return pseudoScheduleDates.every((dt) => {
+          const start = dt;
+          const end = dt.plus({ minutes: totalDuration });
 
-        return allSchedules.some((s) => {
-          return Interval.fromDateTimes(pseudoStart, pseudoEnd).overlaps(
-            Interval.fromDateTimes(
-              DateTime.fromJSDate(s.startTime),
-              DateTime.fromJSDate(s.endTime),
+          if (end.hour >= 19) return false;
+
+          const busyIntervals = unavailableMap[staffId] || [];
+
+          return !busyIntervals.some(({ start: busyStart, end: busyEnd }) =>
+            Interval.fromDateTimes(busyStart, busyEnd).overlaps(
+              Interval.fromDateTimes(start, end),
             ),
           );
         });
       });
-
-      slot.isAvailable = !conflicts;
     }
 
     return allSlots;
@@ -419,21 +407,21 @@ export class SchedulerService {
           entry.endTime.toTimeString().slice(0, 5),
         );
 
-        const start = DateTime.fromJSDate(entry.date).set({
-          hour: sh,
-          minute: sm,
-        });
-        const end = DateTime.fromJSDate(entry.date).set({
-          hour: eh,
-          minute: em,
-        });
+        const start = DateTime.fromJSDate(entry.date, {
+          zone: 'Asia/Kolkata',
+        }).set({ hour: sh, minute: sm });
+        const end = DateTime.fromJSDate(entry.date, {
+          zone: 'Asia/Kolkata',
+        }).set({ hour: eh, minute: em });
 
         map[staffId].push({ start, end });
       }
 
       for (const sch of schedules) {
-        const start = DateTime.fromJSDate(sch.startTime).toUTC();
-        const end = DateTime.fromJSDate(sch.endTime).toUTC();
+        const start = DateTime.fromJSDate(sch.startTime, {
+          zone: 'Asia/Kolkata',
+        });
+        const end = DateTime.fromJSDate(sch.endTime, { zone: 'Asia/Kolkata' });
         map[staffId].push({ start, end });
       }
     }
@@ -886,6 +874,9 @@ export class SchedulerService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           type: ServiceType.recurring,
+          status: {
+            notIn: ['canceled', 'pending'],
+          },
           monthSchedules: {
             some: {
               dayOfWeek: day,
@@ -1324,30 +1315,27 @@ export class SchedulerService {
   ): Promise<boolean> {
     const [hour, minute] = time.split(':').map(Number);
 
-    // 🔁 Normalize today to 1–7 (Mon–Sun)
-    const today = new Date();
-    const currentDay = today.getDay() === 0 ? 7 : today.getDay();
+    const today = DateTime.local().setZone('Asia/Kolkata').startOf('day');
+    const currentDay = today.weekday; // 1–7
 
     let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
     if (daysToAdd === 0) daysToAdd = 7; // always move to next week if same day
 
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysToAdd);
-    targetDate.setHours(hour - 5, minute - 30, 0, 0); // Subtract IST offset manually
+    const target = today.plus({ days: daysToAdd }).set({ hour, minute });
 
-    const start = new Date(targetDate);
-    const end = new Date(
-      start.getTime() + durationMins * 60 * 1000 + 30 * 60 * 1000,
-    ); // buffer
+    const start = target;
+    const end = target.plus({ minutes: durationMins + 30 }); // with buffer
 
-    console.log('🕒 Final UTC ISO start:', start.toISOString());
-    console.log('🕒 Final UTC ISO end:', end.toISOString());
+    console.log('🕒 Local Start:', start.toFormat('yyyy-MM-dd HH:mm'));
+    console.log('🕒 Local End:', end.toFormat('yyyy-MM-dd HH:mm'));
+    console.log('🕒 UTC Start:', start.toUTC().toISO());
+    console.log('🕒 UTC End:', end.toUTC().toISO());
 
     const availableStaff = await this.findAvailableStaffSlot(
-      start,
+      start.toJSDate(), // pass to Prisma as Date
       dayOfWeek,
-      start,
-      end,
+      start.toJSDate(),
+      end.toJSDate(),
     );
 
     return !!availableStaff;
