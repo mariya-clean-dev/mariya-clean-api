@@ -865,7 +865,7 @@ export class SchedulerService {
     this.logger.log('Running Auto-Scheduler...');
 
     const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + 45);
+    targetDate.setDate(today.getDate() + 60);
 
     await this.generateSchedulesForDate(today, targetDate);
 
@@ -878,13 +878,10 @@ export class SchedulerService {
   ): Promise<void> {
     for (
       let currentDate = new Date(startDate);
-      currentDate <= new Date(endDate);
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+      currentDate <= endDate;
+      currentDate.setDate(currentDate.getDate() + 1)
     ) {
-      //const week = getNthWeekdayOfMonth(currentDate);
       const day = currentDate.getDay();
-
-      // console.log(currentDate, day, week);
 
       const bookings = await this.prisma.booking.findMany({
         where: {
@@ -896,32 +893,66 @@ export class SchedulerService {
             },
           },
         },
-        include: { monthSchedules: true, service: true },
+        include: {
+          service: true,
+          recurringType: true,
+          monthSchedules: true,
+        },
       });
+
       for (const booking of bookings) {
-        const schedulesForDay = booking.monthSchedules.filter(
-          (ms: any) => ms.dayOfWeek === day && !ms.skip,
+        const { service, recurringType, monthSchedules, areaSize } = booking;
+        const bookingStartDate = new Date(booking.date);
+        bookingStartDate.setHours(0, 0, 0, 0);
+
+        const dayFrequency = recurringType?.dayFrequency ?? 7;
+
+        const schedulesForDay = monthSchedules.filter(
+          (ms) => ms.dayOfWeek === day && !ms.skip,
         );
+
         if (schedulesForDay.length === 0) continue;
 
+        // Check if already scheduled
         const alreadyScheduled = await this.checkIfBookingScheduled(
           booking.id,
           currentDate,
         );
         if (alreadyScheduled) continue;
 
+        const isSkipped = currentDate < bookingStartDate;
+
         for (const ms of schedulesForDay) {
           const [hours, minutes] = ms.time.split(':').map(Number);
-          const startDateTime = new Date(currentDate);
-          startDateTime.setUTCHours(hours, minutes, 0);
+
+          const startDateTime = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            currentDate.getDate(),
+            hours,
+            minutes,
+            0,
+            0,
+          );
 
           const durationMins = getDurationFromAreaSize(
-            booking.areaSize,
-            booking.service.durationMinutes,
+            areaSize,
+            service.durationMinutes,
           );
+
           const endDateTime = new Date(
-            startDateTime.getTime() + durationMins * 60 * 1000,
+            startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
           );
+
+          if (isSkipped) {
+            this.logger.log(
+              `⚪ Skipping past schedule for booking ${booking.id} on ${currentDate.toDateString()}`,
+            );
+          } else {
+            this.logger.log(
+              `📅 Generating schedule for booking ${booking.id} on ${currentDate.toDateString()}`,
+            );
+          }
 
           const availableStaff = await this.findAvailableStaffSlot(
             currentDate,
@@ -930,16 +961,26 @@ export class SchedulerService {
             endDateTime,
           );
 
-          if (!availableStaff) continue;
+          if (availableStaff) {
+            await this.saveSchedule({
+              bookingId: booking.id,
+              staffId: availableStaff.id,
+              serviceId: service.id,
+              date: startDateTime.toISOString().slice(0, 10),
+              startTime: startDateTime.toISOString(),
+              endTime: endDateTime.toISOString(),
+              timezone: 'UTC',
+              isSkipped,
+            });
 
-          await this.saveSchedule({
-            date: formatDate(currentDate),
-            startTime: formatTime(startDateTime),
-            endTime: formatTime(endDateTime),
-            bookingId: booking.id,
-            staffId: availableStaff.id,
-            serviceId: booking.service.id,
-          });
+            this.logger.log(
+              `✅ Schedule saved for booking ${booking.id} with staff ${availableStaff.id}`,
+            );
+          } else {
+            this.logger.warn(
+              `❌ No available staff for booking ${booking.id} on ${currentDate.toDateString()}`,
+            );
+          }
         }
       }
     }
