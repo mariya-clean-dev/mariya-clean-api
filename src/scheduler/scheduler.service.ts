@@ -276,12 +276,12 @@ export class SchedulerService {
   }) {
     const bufferMins = 30;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.utc().startOf('day');
+    const today = DateTime.local().startOf('day'); // ⬅️ use local, not UTC
     const maxStartDate = today.plus({ days: 21 });
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date).startOf('day');
+      targetDate = DateTime.fromJSDate(date).toLocal().startOf('day'); // ⬅️ ensure .toLocal()
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
@@ -353,7 +353,6 @@ export class SchedulerService {
         pseudoScheduleDates.push(baseStart);
       }
 
-      // ✅ Updated logic to consider all staff availability
       slot.isAvailable = staffIds.some((staffId) => {
         return pseudoScheduleDates.every((dt) => {
           const start = dt;
@@ -419,11 +418,11 @@ export class SchedulerService {
           entry.endTime.toTimeString().slice(0, 5),
         );
 
-        const start = DateTime.fromJSDate(entry.date).set({
+        const start = DateTime.fromJSDate(entry.date).toLocal().set({
           hour: sh,
           minute: sm,
         });
-        const end = DateTime.fromJSDate(entry.date).set({
+        const end = DateTime.fromJSDate(entry.date).toLocal().set({
           hour: eh,
           minute: em,
         });
@@ -432,8 +431,8 @@ export class SchedulerService {
       }
 
       for (const sch of schedules) {
-        const start = DateTime.fromJSDate(sch.startTime).toUTC();
-        const end = DateTime.fromJSDate(sch.endTime).toUTC();
+        const start = DateTime.fromJSDate(sch.startTime).toLocal();
+        const end = DateTime.fromJSDate(sch.endTime).toLocal();
         map[staffId].push({ start, end });
       }
     }
