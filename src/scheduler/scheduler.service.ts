@@ -886,6 +886,9 @@ export class SchedulerService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           type: ServiceType.recurring,
+          status: {
+            notIn: ['canceled', 'pending'],
+          },
           monthSchedules: {
             some: {
               dayOfWeek: day,
