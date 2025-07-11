@@ -276,17 +276,20 @@ export class SchedulerService {
   }) {
     const bufferMins = 30;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.local().startOf('day');
-    const maxStartDate = today.plus({ days: 21 });
+    const today = new Date();
+    const todayStart = new Date(today.setHours(0, 0, 0, 0));
+    const maxStartDate = new Date(todayStart);
+    maxStartDate.setDate(todayStart.getDate() + 21);
 
-    let targetDate: DateTime;
+    let targetDate: Date;
     if (date) {
-      targetDate = DateTime.fromJSDate(date).startOf('day'); // ✅ no `.toLocal()`
+      targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-      targetDate = today;
-      while (targetDate.weekday !== adjustedDay) {
-        targetDate = targetDate.plus({ days: 1 });
+      targetDate = new Date(todayStart);
+      while ((targetDate.getDay() || 7) !== adjustedDay) {
+        targetDate.setDate(targetDate.getDate() + 1);
       }
     } else {
       throw new BadRequestException('Provide either date or dayOfWeek');
@@ -327,8 +330,8 @@ export class SchedulerService {
       where: {
         status: 'scheduled',
         startTime: {
-          gte: today.toJSDate(),
-          lte: maxStartDate.endOf('day').toJSDate(),
+          gte: todayStart,
+          lte: new Date(maxStartDate.getTime() + 24 * 60 * 60 * 1000),
         },
       },
       select: {
@@ -338,16 +341,33 @@ export class SchedulerService {
       },
     });
 
+    for (const sch of allSchedules) {
+      if (!unavailableMap[sch.staffId]) unavailableMap[sch.staffId] = [];
+      unavailableMap[sch.staffId].push({
+        start: sch.startTime,
+        end: sch.endTime,
+      });
+    }
+
     for (const slot of allSlots) {
       const [h, m] = slot.time.split(':').map(Number);
-      const baseStart = targetDate.set({ hour: h, minute: m });
-      const pseudoScheduleDates: DateTime[] = [];
+      const baseStart = new Date(targetDate);
+      baseStart.setHours(h, m, 0, 0);
+
+      const baseEnd = new Date(baseStart.getTime() + totalDuration * 60 * 1000);
+      if (baseEnd.getHours() >= 19) {
+        console.log(`⛔ Slot ${slot.time} skipped - ends after 19:00`);
+        slot.isAvailable = false;
+        continue;
+      }
+
+      const pseudoScheduleDates: Date[] = [];
 
       if (selectedPlanFrequency) {
-        let iter = baseStart;
+        let iter = new Date(baseStart);
         while (iter <= maxStartDate) {
-          pseudoScheduleDates.push(iter);
-          iter = iter.plus({ days: selectedPlanFrequency });
+          pseudoScheduleDates.push(new Date(iter));
+          iter.setDate(iter.getDate() + selectedPlanFrequency);
         }
       } else {
         pseudoScheduleDates.push(baseStart);
@@ -355,16 +375,27 @@ export class SchedulerService {
 
       slot.isAvailable = staffIds.some((staffId) => {
         return pseudoScheduleDates.every((dt) => {
-          const start = dt;
-          const end = dt.plus({ minutes: totalDuration });
-
+          const start = new Date(dt);
+          const end = new Date(start.getTime() + totalDuration * 60 * 1000);
           const busyIntervals = unavailableMap[staffId] || [];
 
-          return !busyIntervals.some(({ start: busyStart, end: busyEnd }) =>
-            Interval.fromDateTimes(busyStart, busyEnd).overlaps(
-              Interval.fromDateTimes(start, end),
-            ),
+          const overlaps = busyIntervals.some(
+            ({ start: busyStart, end: busyEnd }) => {
+              const overlap = !(end <= busyStart || start >= busyEnd);
+              if (overlap) {
+                console.log(
+                  `❌ Staff ${staffId} busy at ${slot.time} | ${start.toISOString()} - ${end.toISOString()}`,
+                );
+              }
+              return overlap;
+            },
           );
+
+          if (!overlaps) {
+            console.log(`✅ Staff ${staffId} available at ${slot.time}`);
+          }
+
+          return !overlaps;
         });
       });
     }
@@ -372,22 +403,11 @@ export class SchedulerService {
     return allSlots;
   }
 
-  arePlansConflicting(
-    targetDate: DateTime,
-    planStartDate: DateTime,
-    planFreq: number,
-    selectedFreq: number,
-  ): boolean {
-    if (planFreq !== selectedFreq) return false;
-    const daysBetween = targetDate.diff(planStartDate, 'days').days;
-    return daysBetween % planFreq === 0;
-  }
-
   private async buildUnavailableMap(
     staffIds: string[],
-    date: DateTime,
-  ): Promise<Record<string, { start: DateTime; end: DateTime }[]>> {
-    const map: Record<string, { start: DateTime; end: DateTime }[]> = {};
+    date: Date,
+  ): Promise<Record<string, { start: Date; end: Date }[]>> {
+    const map: Record<string, { start: Date; end: Date }[]> = {};
 
     for (const staffId of staffIds) {
       map[staffId] = [];
@@ -396,7 +416,7 @@ export class SchedulerService {
         this.prisma.staffAvailability.findMany({
           where: {
             staffId,
-            date: date.toJSDate(),
+            date: date,
             isAvailable: false,
           },
         }),
@@ -404,36 +424,34 @@ export class SchedulerService {
           where: {
             staffId,
             status: 'scheduled',
-            startTime: { lte: date.endOf('day').toJSDate() },
-            endTime: { gte: date.startOf('day').toJSDate() },
+            startTime: { lte: new Date(date.getTime() + 24 * 60 * 60 * 1000) },
+            endTime: { gte: date },
           },
         }),
       ]);
 
       for (const entry of unavailable) {
-        const { h: sh, m: sm } = this.parseTime(
-          entry.startTime.toTimeString().slice(0, 5),
-        );
-        const { h: eh, m: em } = this.parseTime(
-          entry.endTime.toTimeString().slice(0, 5),
-        );
+        const [sh, sm] = entry.startTime
+          .toTimeString()
+          .slice(0, 5)
+          .split(':')
+          .map(Number);
+        const [eh, em] = entry.endTime
+          .toTimeString()
+          .slice(0, 5)
+          .split(':')
+          .map(Number);
 
-        const start = DateTime.fromJSDate(entry.date).set({
-          hour: sh,
-          minute: sm,
-        });
-        const end = DateTime.fromJSDate(entry.date).set({
-          hour: eh,
-          minute: em,
-        });
+        const start = new Date(entry.date);
+        start.setHours(sh, sm, 0, 0);
+        const end = new Date(entry.date);
+        end.setHours(eh, em, 0, 0);
 
         map[staffId].push({ start, end });
       }
 
       for (const sch of schedules) {
-        const start = DateTime.fromJSDate(sch.startTime); // ✅ no .toLocal()
-        const end = DateTime.fromJSDate(sch.endTime); // ✅ no .toLocal()
-        map[staffId].push({ start, end });
+        map[staffId].push({ start: sch.startTime, end: sch.endTime });
       }
     }
 
