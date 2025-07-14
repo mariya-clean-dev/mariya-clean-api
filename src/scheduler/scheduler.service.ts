@@ -159,7 +159,7 @@ export class SchedulerService {
     return {
       data,
       meta: {
-        total,
+        total: data.length,
         page,
         limit,
         totalPages: Math.ceil(total / limit),
