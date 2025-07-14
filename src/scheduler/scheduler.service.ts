@@ -281,9 +281,7 @@ export class SchedulerService {
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'Asia/Kolkata' }).startOf(
-        'day',
-      );
+      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf('day');
     } else if (typeof dayOfWeek === 'number') {
       const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
@@ -408,10 +406,10 @@ export class SchedulerService {
         );
 
         const start = DateTime.fromJSDate(entry.date, {
-          zone: 'Asia/Kolkata',
+          zone: 'UTC',
         }).set({ hour: sh, minute: sm });
         const end = DateTime.fromJSDate(entry.date, {
-          zone: 'Asia/Kolkata',
+          zone: 'UTC',
         }).set({ hour: eh, minute: em });
 
         map[staffId].push({ start, end });
@@ -419,7 +417,7 @@ export class SchedulerService {
 
       for (const sch of schedules) {
         const start = DateTime.fromJSDate(sch.startTime, {
-          zone: 'Asia/Kolkata',
+          zone: 'UTC',
         });
         const end = DateTime.fromJSDate(sch.endTime, { zone: 'Asia/Kolkata' });
         map[staffId].push({ start, end });
