@@ -271,12 +271,12 @@ export class SchedulerService {
   }) {
     const bufferMins = 60;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.local().setZone('Asia/Kolkata').startOf('day');
+    const today = DateTime.local().setZone('UTC').startOf('day');
     const maxStartDate = today.plus({ days: 21 });
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'Asia/Kolkata' }).startOf(
+      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf(
         'day',
       );
     } else {
