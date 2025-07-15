@@ -276,9 +276,7 @@ export class SchedulerService {
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf(
-        'day',
-      );
+      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf('day');
     } else {
       const weekday = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
@@ -1055,7 +1053,7 @@ export class SchedulerService {
       const start = new Date(date);
       start.setHours(h, m, 0, 0);
 
-      const end = new Date(start.getTime() + (durationMins + 60) * 60000); // +1hr buffer
+      const end = new Date(start.getTime() + durationMins * 60000); // +1hr buffer
       const isSkipped = start < bookingStartDate;
 
       const exists = await this.checkIfBookingScheduled(booking.id, start);
@@ -1528,5 +1526,5 @@ export function getDurationFromAreaSize(
   durationMinutes: number,
 ): number {
   const buffer = Number(60);
-  return buffer + 60 + Math.ceil((area - 1000) / 500) * durationMinutes;
+  return buffer + (area / 500) * durationMinutes;
 }
