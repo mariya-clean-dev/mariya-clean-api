@@ -914,7 +914,7 @@ export class SchedulerService {
           );
 
           const endDateTime = new Date(
-            startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
+            startDateTime.getTime() + durationMins * 60 * 1000,
           );
 
           this.logger.log(
@@ -1021,30 +1021,33 @@ export class SchedulerService {
 
       const { time, dayOfWeek } = template;
 
-      const endDate = new Date(bookingStartDate);
-      endDate.setDate(endDate.getDate() + durationInDays);
+      const [h, m] = time.split(':').map(Number);
 
-      // 🔁 Find the first date matching the desired dayOfWeek on or after today
-      let firstDate = new Date(today);
-      while (firstDate.getDay() !== dayOfWeek) {
-        firstDate.setDate(firstDate.getDate() + 1);
-      }
+      const startDate = DateTime.fromJSDate(bookingStartDate, {
+        zone: 'UTC',
+      }).startOf('day');
+      const endDate = startDate.plus({ days: durationInDays });
 
       console.log(
-        `📆 Generating recurring schedules every ${dayFrequency} days on weekday ${dayOfWeek}`,
+        `📆 Generating recurring schedules every ${dayFrequency} days from ${startDate.toISODate()} to ${endDate.toISODate()} on weekday ${dayOfWeek}`,
       );
 
-      // 🔁 Now add dates with step size = dayFrequency (e.g. 14 for bi-weekly)
-      for (
-        let dateCursor = new Date(firstDate);
-        dateCursor <= endDate;
-        dateCursor.setDate(dateCursor.getDate() + dayFrequency)
-      ) {
+      let current = startDate;
+
+      // Align to day of week (if needed)
+      while (current.weekday % 7 !== dayOfWeek % 7) {
+        current = current.plus({ days: 1 });
+      }
+
+      while (current <= endDate) {
+        const dateOnly = current.toJSDate();
         scheduleDates.push({
-          date: new Date(dateCursor),
+          date: dateOnly,
           time,
           dayOfWeek,
         });
+
+        current = current.plus({ days: dayFrequency });
       }
     }
 
