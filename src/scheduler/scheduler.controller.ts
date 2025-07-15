@@ -72,7 +72,6 @@ export class SchedulerController {
       await this.schedulerService.generateSchedulesForBooking(
         bookingId,
         numberOfDays,
-        // String(startDate),
       );
       return this.resposneService.successResponse(
         'Sucessfully Sheduled For Booking',
@@ -159,27 +158,21 @@ export class SchedulerController {
       ? parseInt(durationMinsRaw, 10)
       : undefined;
 
-    const hasDate = !!date && !isNaN(date.getTime());
-    const hasDayOfWeek =
-      typeof dayOfWeek === 'number' && dayOfWeek >= 0 && dayOfWeek <= 6;
-
-    if (!hasDate && !hasDayOfWeek) {
-      throw new BadRequestException('Provide either a valid date or dayOfWeek');
-    }
-
-    if (hasDate && hasDayOfWeek) {
+    if ((!date && dayOfWeek === undefined) || !durationMins) {
       throw new BadRequestException(
-        'Provide either a date or dayOfWeek, not both',
+        'Required: date or dayOfWeek, and durationMins',
       );
     }
 
-    if (!durationMins) {
-      throw new BadRequestException('durationMins is required');
+    if (date && dayOfWeek !== undefined) {
+      throw new BadRequestException(
+        'Provide either date or dayOfWeek, not both',
+      );
     }
 
     const slots = await this.schedulerService.getTimeSlots({
-      date: hasDate ? date : undefined,
-      dayOfWeek: hasDayOfWeek ? dayOfWeek : undefined,
+      date,
+      dayOfWeek,
       durationMins,
       planId,
     });

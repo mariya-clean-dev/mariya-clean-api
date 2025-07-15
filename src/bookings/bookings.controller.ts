@@ -64,34 +64,29 @@ export class BookingsController {
     console.log('📥 Incoming Booking DTO:', createBookingDto);
 
     const { type, date, time } = createBookingDto;
+    if (!date || (type === ServiceType.recurring && !time)) {
+      throw new BadRequestException('Date and time are required for booking.');
+    }
+
+    const service = await this.prisma.service.findUnique({
+      where: { id: createBookingDto.serviceId },
+    });
+    if (!service) throw new BadRequestException('Invalid service ID');
+
+    const durationMins =
+      (createBookingDto.areaSize / 500) * service.durationMinutes;
 
     if (type === ServiceType.recurring) {
-      const service = await this.prisma.service.findUnique({
-        where: { id: createBookingDto.serviceId },
-      });
-
-      if (!service) throw new BadRequestException('Invalid service ID');
-
-      if (!date || !time)
-        throw new BadRequestException(
-          'Date and time are required for recurring bookings.',
-        );
-
-      const dayOfWeek = getDay(new Date(date)); // 0 = Sunday, 6 = Saturday
-
-      const durationMins =
-        (createBookingDto.areaSize / 500) * service.durationMinutes;
-
+      const dayOfWeek = getDay(new Date(date));
       const isAvailable =
         await this.schedulerService.isStaffAvailableOnDayAndTime(
           dayOfWeek,
           time,
           durationMins,
         );
-
       if (!isAvailable) {
         throw new ConflictException(
-          'No staff is available for the requested time. Please choose a different slot.',
+          'No staff is available for the requested time.',
         );
       }
     }
@@ -102,18 +97,8 @@ export class BookingsController {
       phone: createBookingDto.phone,
       role: 'customer',
     };
-
     const user = await this.usersService.findOrCreateUser(userData);
     console.log('👤 User resolved/created:', user.id);
-
-    if (type === ServiceType.one_time && !date)
-      throw new BadRequestException('Date is required for one-time bookings.');
-
-    if (type === ServiceType.recurring && (!date || !time)) {
-      throw new BadRequestException(
-        'Date and time are required for recurring bookings.',
-      );
-    }
 
     const booking = await this.bookingsService.create(
       createBookingDto,
@@ -127,58 +112,39 @@ export class BookingsController {
         customerId: user.stripeCustomerId,
         successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
         cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
-        metadata: {
-          bookingId: booking.id,
-          userId: user.id,
-          date: createBookingDto.date,
-          time: createBookingDto.time,
-        },
+        metadata: { bookingId: booking.id, userId: user.id, date, time },
       });
-
       stripeData = { checkoutUrl: session.url };
       console.log('🧾 Stripe session created:', session.url);
     }
 
-    if (type === ServiceType.one_time) {
-      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
-        console.log('📆 Creating one-time schedule...');
-        await this.schedulerService.generateOneTimeScheduleForBooking(
-          booking.id,
-          date,
-          time,
-        );
-        console.log('✅ One-time schedule generated');
-        await this.mailService.sendBookingConfirmationEmail(
-          user.email,
-          user.name,
-          booking.service.name,
-          booking.bookingAddress.address.line_1,
-        );
-      }
-    } else if (type === ServiceType.recurring) {
-      const dayOfWeek = getDay(new Date(date)); // Extract dayOfWeek again
+    if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
+      const dayOfWeek = getDay(new Date(date));
 
-      console.log(
-        `📆 Creating recurring MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}`,
+      if (type === ServiceType.recurring) {
+        console.log(
+          `📆 Creating MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}`,
+        );
+        await this.schedulerService.createMonthSchedules([
+          { bookingId: booking.id, dayOfWeek, time },
+        ]);
+      }
+
+      const scheduleDurationDays = type === ServiceType.one_time ? 0 : 60;
+      console.log('⚙️ Generating schedule(s)...');
+      await this.schedulerService.generateSchedulesForBooking(
+        booking.id,
+        scheduleDurationDays,
+        type === ServiceType.one_time ? time : undefined,
       );
+      console.log('✅ Schedules generated');
 
-      await this.schedulerService.createMonthSchedules([
-        { bookingId: booking.id, dayOfWeek, time },
-      ]);
-      console.log('📌 MonthSchedule created');
-
-      if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
-        console.log('⚙️ Generating recurring schedules...');
-        await this.schedulerService.generateSchedulesForBooking(booking.id, 30);
-        console.log('✅ Recurring schedules generated');
-
-        await this.mailService.sendBookingConfirmationEmail(
-          user.email,
-          user.name,
-          booking.service.name,
-          booking.bookingAddress.address.line_1,
-        );
-      }
+      await this.mailService.sendBookingConfirmationEmail(
+        user.email,
+        user.name,
+        booking.service.name,
+        booking.bookingAddress.address.line_1,
+      );
     }
 
     return this.responseService.successResponse(
