@@ -153,7 +153,7 @@ export class StripeWebhookController {
           booking.bookingAddress.address.line_1,
         );
 
-        await this.shedulerService.generateSchedulesForBooking(booking.id);
+        // await this.shedulerService.generateSchedulesForBooking(booking.id);
 
         await this.notificationsService.createNotification({
           userId: booking.userId,
@@ -412,10 +412,10 @@ export class StripeWebhookController {
           }
         }
       }
-      // ⛔ DO NOT RETURN HERE — allow schedule generation to continue
+      // ⛔ DO NOT RETURN — allow schedule generation to continue
     }
 
-    // ✅ Handle schedule generation
+    // ✅ Validate metadata
     if (!bookingId) {
       throw new Error('Missing bookingId in metadata.');
     }
@@ -435,21 +435,19 @@ export class StripeWebhookController {
       throw new Error('Booking not found after payment.');
     }
 
-    if (booking.type === 'recurring') {
-      await this.shedulerService.generateSchedulesForBooking(booking.id);
-    } else if (booking.type === 'one_time') {
-      if (!date || !time) {
-        throw new Error('Date and time are required for one-time booking.');
-      }
+    // ✅ Determine scheduling duration
+    const durationInDays = booking.type === 'recurring' ? 30 : 0;
 
-      await this.shedulerService.generateOneTimeScheduleForBooking(
-        booking.id,
-        date,
-        time,
-      );
-    } else {
-      throw new Error(`Unhandled booking type: ${booking.type}`);
+    if (booking.type === 'one_time' && (!date || !time)) {
+      throw new Error('Date and time are required for one-time booking.');
     }
+
+    // ✅ Generate schedule(s)
+    await this.shedulerService.generateSchedulesForBooking(
+      booking.id,
+      durationInDays,
+      time,
+    );
 
     // 📧 Send confirmation email
     await this.mailService.sendBookingConfirmationEmail(

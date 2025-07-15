@@ -258,11 +258,6 @@ export class SchedulerService {
 
   //   return slots;
 
-  private parseTime(timeStr: string): { h: number; m: number } {
-    const [h, m] = timeStr.split(':').map(Number);
-    return { h, m };
-  }
-
   async getTimeSlots({
     date,
     dayOfWeek,
@@ -274,100 +269,101 @@ export class SchedulerService {
     durationMins: number;
     planId?: string;
   }) {
-    const bufferMins = 30;
+    const bufferMins = 60;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.local().startOf('day');
+    const today = DateTime.local().setZone('Asia/Kolkata').startOf('day');
     const maxStartDate = today.plus({ days: 21 });
 
     let targetDate: DateTime;
     if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf('day');
-    } else if (typeof dayOfWeek === 'number') {
-      const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+      targetDate = DateTime.fromJSDate(date, { zone: 'Asia/Kolkata' }).startOf(
+        'day',
+      );
+    } else {
+      const weekday = dayOfWeek === 0 ? 7 : dayOfWeek;
       targetDate = today;
-      while (targetDate.weekday !== adjustedDay) {
+      while (targetDate.weekday !== weekday) {
         targetDate = targetDate.plus({ days: 1 });
       }
-    } else {
-      throw new BadRequestException('Provide either date or dayOfWeek');
     }
 
-    const staffList = await this.prisma.user.findMany({
+    const staff = await this.prisma.user.findMany({
       where: { role: { name: 'staff' }, status: 'active' },
-      orderBy: { priority: 'asc' },
       select: { id: true },
+      orderBy: { priority: 'asc' },
     });
-    const staffIds = staffList.map((s) => s.id);
 
-    const stepMinutes = 30;
-    const allSlots = [];
+    const staffIds = staff.map((s) => s.id);
+
+    const timeSlots = this.generateBaseSlots();
+
+    const recurringFreq = planId ? await this.getPlanFrequency(planId) : null;
+
+    const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
+
+    for (const slot of timeSlots) {
+      const [hour, min] = slot.time.split(':').map(Number);
+      const baseStart = targetDate.set({ hour, minute: min });
+      const slotIntervals = recurringFreq
+        ? this.expandRecurringIntervals(baseStart, recurringFreq, maxStartDate)
+        : [baseStart];
+
+      slot.isAvailable = staffIds.some((staffId) =>
+        slotIntervals.every((start) => {
+          const end = start.plus({ minutes: totalDuration });
+          return !this.doesOverlap(unavailableMap[staffId] || [], start, end);
+        }),
+      );
+    }
+
+    return timeSlots;
+  }
+
+  private generateBaseSlots() {
+    const slots = [];
     for (let hour = 9; hour < 19; hour++) {
-      for (let minute = 0; minute < 60; minute += stepMinutes) {
-        allSlots.push({
+      for (let minute of [0, 30]) {
+        slots.push({
           time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
           isAvailable: true,
         });
       }
     }
-
-    let selectedPlanFrequency: number | null = null;
-    if (planId) {
-      const selectedPlan = await this.prisma.recurringType.findUnique({
-        where: { id: planId },
-        select: { dayFrequency: true },
-      });
-      if (selectedPlan) {
-        selectedPlanFrequency = selectedPlan.dayFrequency;
-      }
-    }
-
-    const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
-
-    for (const slot of allSlots) {
-      const [h, m] = slot.time.split(':').map(Number);
-      const baseStart = targetDate.set({ hour: h, minute: m });
-      const pseudoScheduleDates: DateTime[] = [];
-
-      if (selectedPlanFrequency) {
-        let iter = baseStart;
-        while (iter <= maxStartDate) {
-          pseudoScheduleDates.push(iter);
-          iter = iter.plus({ days: selectedPlanFrequency });
-        }
-      } else {
-        pseudoScheduleDates.push(baseStart);
-      }
-
-      slot.isAvailable = staffIds.some((staffId) => {
-        return pseudoScheduleDates.every((dt) => {
-          const start = dt;
-          const end = dt.plus({ minutes: totalDuration });
-
-          if (end.hour >= 19) return false;
-
-          const busyIntervals = unavailableMap[staffId] || [];
-
-          return !busyIntervals.some(({ start: busyStart, end: busyEnd }) =>
-            Interval.fromDateTimes(busyStart, busyEnd).overlaps(
-              Interval.fromDateTimes(start, end),
-            ),
-          );
-        });
-      });
-    }
-
-    return allSlots;
+    return slots;
   }
 
-  arePlansConflicting(
-    targetDate: DateTime,
-    planStartDate: DateTime,
-    planFreq: number,
-    selectedFreq: number,
+  private async getPlanFrequency(planId: string): Promise<number | null> {
+    const plan = await this.prisma.recurringType.findUnique({
+      where: { id: planId },
+      select: { dayFrequency: true },
+    });
+    return plan?.dayFrequency ?? null;
+  }
+
+  private expandRecurringIntervals(
+    start: DateTime,
+    freq: number,
+    maxDate: DateTime,
+  ): DateTime[] {
+    const intervals: DateTime[] = [];
+    let current = start;
+    while (current <= maxDate) {
+      intervals.push(current);
+      current = current.plus({ days: freq });
+    }
+    return intervals;
+  }
+
+  private doesOverlap(
+    intervals: { start: DateTime; end: DateTime }[],
+    start: DateTime,
+    end: DateTime,
   ): boolean {
-    if (planFreq !== selectedFreq) return false;
-    const daysBetween = targetDate.diff(planStartDate, 'days').days;
-    return daysBetween % planFreq === 0;
+    return intervals.some((i) =>
+      Interval.fromDateTimes(i.start, i.end).overlaps(
+        Interval.fromDateTimes(start, end),
+      ),
+    );
   }
 
   private async buildUnavailableMap(
@@ -377,9 +373,7 @@ export class SchedulerService {
     const map: Record<string, { start: DateTime; end: DateTime }[]> = {};
 
     for (const staffId of staffIds) {
-      map[staffId] = [];
-
-      const [unavailable, schedules] = await Promise.all([
+      const [unavailability, schedules] = await Promise.all([
         this.prisma.staffAvailability.findMany({
           where: {
             staffId,
@@ -397,31 +391,16 @@ export class SchedulerService {
         }),
       ]);
 
-      for (const entry of unavailable) {
-        const { h: sh, m: sm } = this.parseTime(
-          entry.startTime.toTimeString().slice(0, 5),
-        );
-        const { h: eh, m: em } = this.parseTime(
-          entry.endTime.toTimeString().slice(0, 5),
-        );
-
-        const start = DateTime.fromJSDate(entry.date, {
-          zone: 'UTC',
-        }).set({ hour: sh, minute: sm });
-        const end = DateTime.fromJSDate(entry.date, {
-          zone: 'UTC',
-        }).set({ hour: eh, minute: em });
-
-        map[staffId].push({ start, end });
-      }
-
-      for (const sch of schedules) {
-        const start = DateTime.fromJSDate(sch.startTime, {
-          zone: 'UTC',
-        });
-        const end = DateTime.fromJSDate(sch.endTime, { zone: 'Asia/Kolkata' });
-        map[staffId].push({ start, end });
-      }
+      map[staffId] = [
+        ...unavailability.map((entry) => ({
+          start: DateTime.fromJSDate(entry.startTime, { zone: 'UTC' }),
+          end: DateTime.fromJSDate(entry.endTime, { zone: 'UTC' }),
+        })),
+        ...schedules.map((sch) => ({
+          start: DateTime.fromJSDate(sch.startTime, { zone: 'UTC' }),
+          end: DateTime.fromJSDate(sch.endTime, { zone: 'UTC' }),
+        })),
+      ];
     }
 
     return map;
@@ -976,157 +955,144 @@ export class SchedulerService {
     }
   }
 
-  async generateOneTimeScheduleForBooking(
-    bookingId: string,
-    date: string | Date,
-    time: string,
-  ): Promise<void> {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { service: true },
-    });
-
-    if (!booking) {
-      throw new Error('Booking not found');
-    }
-
-    const normalizedDate = date instanceof Date ? date : new Date(date);
-    const [hours, minutes] = time.split(':').map(Number);
-
-    const startDateTime = new Date(normalizedDate);
-    startDateTime.setHours(hours, minutes, 0, 0);
-
-    const durationMins = getDurationFromAreaSize(
-      booking.areaSize,
-      booking.service.durationMinutes,
-    );
-    const endDateTime = new Date(
-      startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
+  async blockStaffAvailability(
+    staffId: string,
+    startTime: Date,
+    endTime: Date,
+    dayOfWeek: number,
+  ) {
+    const dateOnly = new Date(
+      startTime.toISOString().split('T')[0] + 'T00:00:00.000Z',
     );
 
-    const dayOfWeek = startDateTime.getDay();
-
-    const availableStaff = await this.findAvailableStaffSlot(
-      startDateTime,
-      dayOfWeek,
-      startDateTime,
-      endDateTime,
-    );
-
-    await this.saveSchedule({
-      date: startDateTime.toISOString().slice(0, 10),
-      startTime: startDateTime.toISOString(),
-      endTime: endDateTime.toISOString(),
-      bookingId: booking.id,
-      staffId: availableStaff?.id ?? null,
-      serviceId: booking.service.id,
-      timezone: 'UTC',
-      isSkipped: false,
+    await this.prisma.staffAvailability.create({
+      data: {
+        staff: { connect: { id: staffId } },
+        date: dateOnly,
+        dayOfWeek,
+        startTime,
+        endTime,
+        isAvailable: false,
+      },
     });
   }
 
   async generateSchedulesForBooking(
     bookingId: string,
-    durationInDays: number = 30,
+    durationInDays = 0,
+    timeFromInput?: string, // Only needed for one-time bookings
   ): Promise<void> {
-    console.log(`📥 Starting schedule generation for bookingId: ${bookingId}`);
-
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        service: true,
-        recurringType: true,
-        monthSchedules: true,
-      },
+      include: { service: true, recurringType: true, monthSchedules: true },
     });
+    if (!booking) throw new Error('Booking not found');
 
-    if (!booking || booking.type !== 'recurring') {
-      console.warn(`⚠️ Booking not found or not recurring`);
-      return;
-    }
+    const { service, areaSize, type, date } = booking;
 
-    const { recurringType, service, areaSize, monthSchedules } = booking;
-    const dayFrequency = recurringType?.dayFrequency ?? 7;
+    const durationMins = getDurationFromAreaSize(
+      areaSize,
+      service.durationMinutes,
+    );
 
-    const scheduleTemplate = monthSchedules.find((ms) => !ms.skip);
-    if (!scheduleTemplate) {
-      console.warn(
-        `⚠️ No usable month schedule found for booking ${bookingId}`,
-      );
-      return;
-    }
-
-    const { dayOfWeek, time } = scheduleTemplate;
-    const [hours, minutes] = time.split(':').map(Number);
+    const bookingStartDate = new Date(date);
+    bookingStartDate.setHours(0, 0, 0, 0);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const bookingStartDate = new Date(booking.date);
-    bookingStartDate.setHours(0, 0, 0, 0);
+    const scheduleDates: { date: Date; time: string; dayOfWeek: number }[] = [];
 
-    // Start generating from the booking start date
-    let nextDate = new Date(bookingStartDate);
-    nextDate.setHours(0, 0, 0, 0);
+    if (type === 'one_time') {
+      const time = timeFromInput || '10:00';
+      const dayOfWeek = bookingStartDate.getDay();
+      scheduleDates.push({
+        date: bookingStartDate,
+        time,
+        dayOfWeek,
+      });
+    } else if (type === 'recurring') {
+      const recurringType = booking.recurringType;
+      const dayFrequency = recurringType?.dayFrequency ?? 7;
+      const template = booking.monthSchedules.find((ms) => !ms.skip);
 
-    // Calculate end date from start
-    const endDate = new Date(bookingStartDate);
-    endDate.setDate(endDate.getDate() + durationInDays);
+      if (!template) {
+        console.warn(`⚠️ No usable schedule template for booking ${bookingId}`);
+        return;
+      }
 
-    while (nextDate <= endDate) {
-      const startDateTime = new Date(nextDate);
-      startDateTime.setHours(hours, minutes, 0, 0);
+      const { time, dayOfWeek } = template;
 
-      const durationMins = getDurationFromAreaSize(
-        areaSize,
-        service.durationMinutes,
-      );
+      const endDate = new Date(bookingStartDate);
+      endDate.setDate(endDate.getDate() + durationInDays);
 
-      const endDateTime = new Date(
-        startDateTime.getTime() + (durationMins + 30) * 60 * 1000,
-      );
-
-      const isSkipped = nextDate < today;
+      // 🔁 Find the first date matching the desired dayOfWeek on or after today
+      let firstDate = new Date(today);
+      while (firstDate.getDay() !== dayOfWeek) {
+        firstDate.setDate(firstDate.getDate() + 1);
+      }
 
       console.log(
-        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'} schedule on ${nextDate.toDateString()}`,
+        `📆 Generating recurring schedules every ${dayFrequency} days on weekday ${dayOfWeek}`,
       );
 
-      const alreadyExists = await this.checkIfBookingScheduled(
-        booking.id,
-        nextDate,
-      );
-      if (alreadyExists) {
-        console.log(
-          `🚫 Schedule already exists for ${nextDate.toDateString()}, skipping`,
-        );
-        nextDate.setDate(nextDate.getDate() + dayFrequency);
+      // 🔁 Now add dates with step size = dayFrequency (e.g. 14 for bi-weekly)
+      for (
+        let dateCursor = new Date(firstDate);
+        dateCursor <= endDate;
+        dateCursor.setDate(dateCursor.getDate() + dayFrequency)
+      ) {
+        scheduleDates.push({
+          date: new Date(dateCursor),
+          time,
+          dayOfWeek,
+        });
+      }
+    }
+
+    for (const { date, time, dayOfWeek } of scheduleDates) {
+      const [h, m] = time.split(':').map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+
+      const end = new Date(start.getTime() + (durationMins + 60) * 60000); // +1hr buffer
+      const isSkipped = start < bookingStartDate;
+
+      const exists = await this.checkIfBookingScheduled(booking.id, start);
+      if (exists) {
+        console.log(`🚫 Schedule exists for ${start.toISOString()}`);
         continue;
       }
 
-      const availableStaff = isSkipped
-        ? null
-        : await this.findAvailableStaffSlot(
-            nextDate,
-            dayOfWeek,
-            startDateTime,
-            endDateTime,
-          );
+      const staff = await this.findAvailableStaffSlot(
+        start,
+        dayOfWeek,
+        start,
+        end,
+      );
+
+      if (!staff && !isSkipped) {
+        console.warn(`❌ No available staff for ${start.toISOString()}`);
+        continue;
+      }
 
       await this.saveSchedule({
+        date: start.toISOString().slice(0, 10),
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
         bookingId: booking.id,
-        staffId: availableStaff?.id ?? undefined,
+        staffId: staff?.id ?? null,
         serviceId: service.id,
-        date: startDateTime.toISOString().slice(0, 10), // 'YYYY-MM-DD'
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
+        timezone: 'UTC',
         isSkipped,
       });
 
-      nextDate.setDate(nextDate.getDate() + dayFrequency);
+      console.log(
+        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'}: ${start.toISOString()} with ${staff?.name ?? 'no staff'}`,
+      );
     }
 
-    console.log(`✅ Recurring schedules finished for booking: ${booking.id}`);
+    console.log(`✅ Schedule generation complete for booking: ${booking.id}`);
   }
 
   getNextDateByDayOfWeekLuxon(dayOfWeek: number, timezone: string): DateTime {
@@ -1297,7 +1263,7 @@ export class SchedulerService {
   ): Promise<boolean> {
     const [hour, minute] = time.split(':').map(Number);
 
-    const today = DateTime.local().setZone('Asia/Kolkata').startOf('day');
+    const today = DateTime.local().setZone('UTC').startOf('day');
     const currentDay = today.weekday; // 1–7
 
     let daysToAdd = (dayOfWeek - currentDay + 7) % 7;
@@ -1329,9 +1295,10 @@ export class SchedulerService {
     startTime: Date,
     endTime: Date,
   ) {
-    const requestStart = startTime;
-    const requestEnd = endTime;
+    const isoDate = date.toISOString().split('T')[0]; // extract YYYY-MM-DD
+    const dayStart = new Date(`${isoDate}T00:00:00.000Z`);
 
+    // 🔍 Step 1: Get all active staff ordered by priority
     const allStaffs = await this.prisma.user.findMany({
       where: {
         role: { name: 'staff' },
@@ -1341,10 +1308,9 @@ export class SchedulerService {
       select: { id: true, name: true, priority: true },
     });
 
+    // 📅 Step 2: Check staff availability for the specific date
     const availabilities = await this.prisma.staffAvailability.findMany({
-      where: {
-        date: new Date(date.toISOString().split('T')[0] + 'T00:00:00.000Z'),
-      },
+      where: { date: dayStart },
       select: {
         staffId: true,
         startTime: true,
@@ -1354,38 +1320,45 @@ export class SchedulerService {
     });
 
     const unavailableByAvailability = new Set<string>();
-    for (const a of availabilities) {
-      if (!a.isAvailable) {
-        if (a.startTime < requestEnd && a.endTime > requestStart) {
-          unavailableByAvailability.add(a.staffId);
-        }
+    for (const entry of availabilities) {
+      if (
+        !entry.isAvailable &&
+        entry.startTime < endTime &&
+        entry.endTime > startTime
+      ) {
+        unavailableByAvailability.add(entry.staffId);
       }
     }
 
+    // ⏱ Step 3: Check if any staff has overlapping schedules
     const conflictingSchedules = await this.prisma.schedule.findMany({
       where: {
-        startTime: { lt: requestEnd },
-        endTime: { gt: requestStart },
+        isSkipped: false, // exclude skipped schedules
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
       },
       select: { staffId: true },
     });
 
-    const unavailableBySchedule = new Set<string>(
+    const unavailableBySchedule = new Set(
       conflictingSchedules.map((s) => s.staffId),
     );
 
-    const completelyUnavailable = new Set([
+    // 🚫 Combine both unavailable sets
+    const unavailable = new Set([
       ...unavailableByAvailability,
       ...unavailableBySchedule,
     ]);
 
+    // ✅ Step 4: Pick the first available staff (priority-wise)
     const availableStaff = allStaffs.find(
-      (staff) => !completelyUnavailable.has(staff.id),
+      (staff) => !unavailable.has(staff.id),
     );
 
     console.log(
-      `✅ Available staff selected: ${availableStaff?.name ?? 'None'}`,
+      `🟢 Staff selected: ${availableStaff?.name ?? 'None available'} for ${startTime.toISOString()} - ${endTime.toISOString()}`,
     );
+
     return availableStaff || null;
   }
 
