@@ -271,7 +271,7 @@ export class SchedulerService {
   }) {
     const bufferMins = 60;
     const totalDuration = durationMins + bufferMins;
-    const today = DateTime.local().setZone('UTC').startOf('day');
+    const today = DateTime.utc().startOf('day');
     const maxStartDate = today.plus({ days: 30 });
 
     let targetDate: DateTime;
@@ -292,26 +292,33 @@ export class SchedulerService {
     });
 
     const staffIds = staff.map((s) => s.id);
-
     const timeSlots = this.generateBaseSlots();
 
     const recurringFreq = planId ? await this.getPlanFrequency(planId) : null;
-
     const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
 
     for (const slot of timeSlots) {
       const [hour, min] = slot.time.split(':').map(Number);
       const baseStart = targetDate.set({ hour, minute: min });
+
+      // 🔁 Expand recurring intervals for this slot
       const slotIntervals = recurringFreq
         ? this.expandRecurringIntervals(baseStart, recurringFreq, maxStartDate)
         : [baseStart];
 
-      slot.isAvailable = staffIds.some((staffId) =>
-        slotIntervals.every((start) => {
+      // ✅ At least one staff must be available for all occurrences
+      slot.isAvailable = staffIds.some((staffId) => {
+        const intervals = unavailableMap[staffId] || [];
+
+        return slotIntervals.every((start) => {
           const end = start.plus({ minutes: totalDuration });
-          return !this.doesOverlap(unavailableMap[staffId] || [], start, end);
-        }),
-      );
+
+          const overlaps = this.doesOverlap(intervals, start, end);
+
+          // 🚫 If overlap found in any future occurrence for this staff, mark as unavailable
+          return !overlaps;
+        });
+      });
     }
 
     return timeSlots;
@@ -839,6 +846,9 @@ export class SchedulerService {
     startDate: Date,
     endDate: Date,
   ): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     for (
       let currentDate = new Date(startDate);
       currentDate <= new Date(endDate);
@@ -849,15 +859,8 @@ export class SchedulerService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           type: ServiceType.recurring,
-          status: {
-            notIn: ['canceled', 'pending'],
-          },
-          monthSchedules: {
-            some: {
-              dayOfWeek: day,
-              skip: false,
-            },
-          },
+          status: { notIn: ['canceled', 'pending'] },
+          monthSchedules: { some: { dayOfWeek: day, skip: false } },
         },
         include: {
           service: true,
@@ -871,22 +874,21 @@ export class SchedulerService {
         const bookingStartDate = new Date(booking.date);
         bookingStartDate.setHours(0, 0, 0, 0);
 
-        const dayFrequency = recurringType?.dayFrequency ?? 7;
-
         const current = new Date(currentDate);
         current.setHours(0, 0, 0, 0);
 
+        const dayFrequency = recurringType?.dayFrequency ?? 7;
         const msDiff = current.getTime() - bookingStartDate.getTime();
         const daysSinceBooking = Math.floor(msDiff / (1000 * 60 * 60 * 24));
 
-        if (daysSinceBooking < 0 || daysSinceBooking % dayFrequency !== 0) {
-          continue; // Skip if before start or not in recurrence pattern
-        }
+        // Skip if not part of recurring pattern
+        if (daysSinceBooking % dayFrequency !== 0) continue;
+
+        const isSkipped = current > today && current < bookingStartDate; // ⬅️ Skipped but in future
 
         const schedulesForDay = monthSchedules.filter(
           (ms) => ms.dayOfWeek === day && !ms.skip,
         );
-
         if (schedulesForDay.length === 0) continue;
 
         const alreadyScheduled = await this.checkIfBookingScheduled(
@@ -912,13 +914,8 @@ export class SchedulerService {
             areaSize,
             service.durationMinutes,
           );
-
           const endDateTime = new Date(
             startDateTime.getTime() + durationMins * 60 * 1000,
-          );
-
-          this.logger.log(
-            `📅 Generating schedule for booking ${booking.id} on ${currentDate.toDateString()}`,
           );
 
           const availableStaff = await this.findAvailableStaffSlot(
@@ -937,11 +934,11 @@ export class SchedulerService {
               startTime: startDateTime.toISOString(),
               endTime: endDateTime.toISOString(),
               timezone: 'UTC',
-              isSkipped: false,
+              isSkipped, // ✅ Skipped flag
             });
 
             this.logger.log(
-              `✅ Schedule saved for booking ${booking.id} with staff ${availableStaff.id}`,
+              `${isSkipped ? '⚠️ Skipped' : '✅'} Schedule saved for booking ${booking.id} on ${currentDate.toDateString()} with staff ${availableStaff.id}`,
             );
           } else {
             this.logger.warn(
@@ -978,7 +975,7 @@ export class SchedulerService {
   async generateSchedulesForBooking(
     bookingId: string,
     durationInDays = 0,
-    timeFromInput?: string, // Only needed for one-time bookings
+    timeFromInput?: string, // Only for one-time bookings
   ): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -994,12 +991,13 @@ export class SchedulerService {
     );
 
     const bookingStartDate = new Date(date);
-    bookingStartDate.setHours(0, 0, 0, 0);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const scheduleDates: { date: Date; time: string; dayOfWeek: number }[] = [];
+    const scheduleDates: {
+      date: Date;
+      time: string;
+      dayOfWeek: number;
+      isSkipped: boolean;
+    }[] = [];
 
     if (type === 'one_time') {
       const time = timeFromInput || '10:00';
@@ -1008,6 +1006,7 @@ export class SchedulerService {
         date: bookingStartDate,
         time,
         dayOfWeek,
+        isSkipped: false,
       });
     } else if (type === 'recurring') {
       const recurringType = booking.recurringType;
@@ -1020,48 +1019,50 @@ export class SchedulerService {
       }
 
       const { time, dayOfWeek } = template;
-
-      const [h, m] = time.split(':').map(Number);
-
-      const startDate = DateTime.fromJSDate(bookingStartDate, {
+      const start = DateTime.fromJSDate(bookingStartDate, {
         zone: 'UTC',
       }).startOf('day');
-      const endDate = startDate.plus({ days: durationInDays });
+      const end = start.plus({ days: durationInDays });
 
-      console.log(
-        `📆 Generating recurring schedules every ${dayFrequency} days from ${startDate.toISODate()} to ${endDate.toISODate()} on weekday ${dayOfWeek}`,
-      );
+      let hasSkipped = false;
 
-      let current = startDate;
-
-      // Align to day of week (if needed)
-      while (current.weekday % 7 !== dayOfWeek % 7) {
-        current = current.plus({ days: 1 });
-      }
-
-      while (current <= endDate) {
-        const dateOnly = current.toJSDate();
+      // 🔁 One skipped schedule before start date
+      let prev = start.minus({ days: dayFrequency });
+      if (prev.weekday % 7 === dayOfWeek % 7) {
         scheduleDates.push({
-          date: dateOnly,
+          date: prev.toJSDate(),
           time,
           dayOfWeek,
+          isSkipped: true,
         });
-
+        hasSkipped = true;
+      }
+      // 🔁 Forward schedules from startDate to endDate
+      let current = start;
+      while (current <= end) {
+        if (current.weekday % 7 === dayOfWeek % 7) {
+          scheduleDates.push({
+            date: current.toJSDate(),
+            time,
+            dayOfWeek,
+            isSkipped: false,
+          });
+        }
         current = current.plus({ days: dayFrequency });
       }
+
+      scheduleDates.sort((a, b) => a.date.getTime() - b.date.getTime());
     }
 
-    for (const { date, time, dayOfWeek } of scheduleDates) {
+    for (const { date, time, dayOfWeek, isSkipped } of scheduleDates) {
       const [h, m] = time.split(':').map(Number);
       const start = new Date(date);
       start.setHours(h, m, 0, 0);
-
-      const end = new Date(start.getTime() + durationMins * 60000); // +1hr buffer
-      const isSkipped = start < bookingStartDate;
+      const end = new Date(start.getTime() + durationMins * 60000);
 
       const exists = await this.checkIfBookingScheduled(booking.id, start);
       if (exists) {
-        console.log(`🚫 Schedule exists for ${start.toISOString()}`);
+        console.log(`🚫 Schedule already exists for ${start.toISOString()}`);
         continue;
       }
 
@@ -1089,7 +1090,9 @@ export class SchedulerService {
       });
 
       console.log(
-        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'}: ${start.toISOString()} with ${staff?.name ?? 'no staff'}`,
+        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'}: ${start.toISOString()} with ${
+          staff?.name ?? 'no staff'
+        }`,
       );
     }
 
