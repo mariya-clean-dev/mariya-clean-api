@@ -272,7 +272,7 @@ export class SchedulerService {
     const bufferMins = 60;
     const totalDuration = durationMins + bufferMins;
     const today = DateTime.local().setZone('UTC').startOf('day');
-    const maxStartDate = today.plus({ days: 21 });
+    const maxStartDate = today.plus({ days: 30 });
 
     let targetDate: DateTime;
     if (date) {
@@ -292,8 +292,11 @@ export class SchedulerService {
     });
 
     const staffIds = staff.map((s) => s.id);
+
     const timeSlots = this.generateBaseSlots();
+
     const recurringFreq = planId ? await this.getPlanFrequency(planId) : null;
+
     const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
 
     for (const slot of timeSlots) {
@@ -303,36 +306,28 @@ export class SchedulerService {
         ? this.expandRecurringIntervals(baseStart, recurringFreq, maxStartDate)
         : [baseStart];
 
-      slot.isAvailable = staffIds.some((staffId) => {
-        const existingSchedules = unavailableMap[staffId] || [];
-
-        return slotIntervals.every((start) => {
+      slot.isAvailable = staffIds.some((staffId) =>
+        slotIntervals.every((start) => {
           const end = start.plus({ minutes: totalDuration });
-
-          const overlaps = this.doesOverlap(existingSchedules, start, end);
-          if (!overlaps) return true;
-
-          if (recurringFreq) {
-            // Check if overlapping intervals match the same recurring cycle
-            const conflictsInSameCycle = existingSchedules.some((entry) => {
-              const diffDays = Math.abs(entry.start.diff(start, 'days').days);
-              return (
-                diffDays % recurringFreq === 0 &&
-                Interval.fromDateTimes(entry.start, entry.end).overlaps(
-                  Interval.fromDateTimes(start, end),
-                )
-              );
-            });
-
-            return !conflictsInSameCycle;
-          }
-
-          return false; // For non-recurring bookings, any overlap is invalid
-        });
-      });
+          return !this.doesOverlap(unavailableMap[staffId] || [], start, end);
+        }),
+      );
     }
 
     return timeSlots;
+  }
+
+  private generateBaseSlots() {
+    const slots = [];
+    for (let hour = 9; hour < 19; hour++) {
+      for (let minute of [0, 30]) {
+        slots.push({
+          time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+          isAvailable: true,
+        });
+      }
+    }
+    return slots;
   }
 
   private async getPlanFrequency(planId: string): Promise<number | null> {
@@ -341,19 +336,6 @@ export class SchedulerService {
       select: { dayFrequency: true },
     });
     return plan?.dayFrequency ?? null;
-  }
-
-  private generateBaseSlots() {
-    const slots = [];
-    for (let hour = 9; hour < 19; hour++) {
-      for (const minute of [0, 30]) {
-        slots.push({
-          time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-          isAvailable: true,
-        });
-      }
-    }
-    return slots;
   }
 
   private expandRecurringIntervals(
