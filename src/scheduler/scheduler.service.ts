@@ -1424,7 +1424,7 @@ export function getDurationFromAreaSize(
 
 function generateTimeSlots() {
   const slots = [];
-  for (let hour = 1; hour <= 22; hour++) {
+  for (let hour = 8; hour <= 18; hour++) {
     slots.push({
       time: `${hour.toString().padStart(2, '0')}:00`,
       isAvailable: true,
