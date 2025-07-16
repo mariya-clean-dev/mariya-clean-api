@@ -5,7 +5,7 @@ import {
   Logger,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, TransactionStatus } from '@prisma/client';
+import { Prisma, Schedule, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-scheduler.dto';
 import { UpdateScheduleDto } from './dto/update-scheduler.dto';
@@ -167,6 +167,45 @@ export class SchedulerService {
     };
   }
 
+  async getAvailableTimeSlots(
+    dateStr: string,
+    planId: string,
+    durationMins: number,
+  ) {
+    const plan = await this.prisma.recurringType.findUnique({
+      where: { id: planId },
+    });
+    if (!plan) throw new NotFoundException('Plan not found');
+
+    const baseDate = new Date(dateStr);
+    const simulatedDates = simulateFutureDates(baseDate, plan.dayFrequency);
+
+    const existingSchedules = await this.prisma.schedule.findMany({
+      where: {
+        startTime: {
+          gte: new Date(simulatedDates[0].setHours(0, 0, 0, 0)),
+          lte: new Date(simulatedDates[3].setHours(23, 59, 59, 999)),
+        },
+      },
+    });
+
+    const slots = generateTimeSlots();
+
+    for (const slot of slots) {
+      const conflicts = simulatedDates.some((date) => {
+        const [hour, minute] = slot.time.split(':').map(Number);
+        const start = new Date(date);
+        start.setHours(hour, minute, 0, 0);
+        const end = new Date(start.getTime() + durationMins * 60000);
+        return hasConflict(existingSchedules, start, end);
+      });
+
+      slot.isAvailable = !conflicts;
+    }
+
+    return slots;
+  }
+
   // async getTimeSlots(
   //   weekOfMonth: number,
   //   dayOfWeek: number,
@@ -258,158 +297,6 @@ export class SchedulerService {
 
   //   return slots;
 
-  async getTimeSlots({
-    date,
-    dayOfWeek,
-    durationMins,
-    planId,
-  }: {
-    date?: Date;
-    dayOfWeek?: number;
-    durationMins: number;
-    planId?: string;
-  }) {
-    const bufferMins = 60;
-    const totalDuration = durationMins + bufferMins;
-    const today = DateTime.utc().startOf('day');
-    const maxStartDate = today.plus({ days: 30 });
-
-    let targetDate: DateTime;
-    if (date) {
-      targetDate = DateTime.fromJSDate(date, { zone: 'UTC' }).startOf('day');
-    } else {
-      const weekday = dayOfWeek === 0 ? 7 : dayOfWeek;
-      targetDate = today;
-      while (targetDate.weekday !== weekday) {
-        targetDate = targetDate.plus({ days: 1 });
-      }
-    }
-
-    const staff = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' }, status: 'active' },
-      select: { id: true },
-      orderBy: { priority: 'asc' },
-    });
-
-    const staffIds = staff.map((s) => s.id);
-    const timeSlots = this.generateBaseSlots();
-
-    const recurringFreq = planId ? await this.getPlanFrequency(planId) : null;
-    const unavailableMap = await this.buildUnavailableMap(staffIds, targetDate);
-
-    for (const slot of timeSlots) {
-      const [hour, min] = slot.time.split(':').map(Number);
-      const baseStart = targetDate.set({ hour, minute: min });
-
-      // 🔁 Expand recurring intervals for this slot
-      const slotIntervals = recurringFreq
-        ? this.expandRecurringIntervals(baseStart, recurringFreq, maxStartDate)
-        : [baseStart];
-
-      // ✅ At least one staff must be available for all occurrences
-      slot.isAvailable = staffIds.some((staffId) => {
-        const intervals = unavailableMap[staffId] || [];
-
-        return slotIntervals.every((start) => {
-          const end = start.plus({ minutes: totalDuration });
-
-          const overlaps = this.doesOverlap(intervals, start, end);
-
-          // 🚫 If overlap found in any future occurrence for this staff, mark as unavailable
-          return !overlaps;
-        });
-      });
-    }
-
-    return timeSlots;
-  }
-
-  private generateBaseSlots() {
-    const slots = [];
-    for (let hour = 9; hour < 19; hour++) {
-      for (let minute of [0, 30]) {
-        slots.push({
-          time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-          isAvailable: true,
-        });
-      }
-    }
-    return slots;
-  }
-
-  private async getPlanFrequency(planId: string): Promise<number | null> {
-    const plan = await this.prisma.recurringType.findUnique({
-      where: { id: planId },
-      select: { dayFrequency: true },
-    });
-    return plan?.dayFrequency ?? null;
-  }
-
-  private expandRecurringIntervals(
-    start: DateTime,
-    freq: number,
-    maxDate: DateTime,
-  ): DateTime[] {
-    const intervals: DateTime[] = [];
-    let current = start;
-    while (current <= maxDate) {
-      intervals.push(current);
-      current = current.plus({ days: freq });
-    }
-    return intervals;
-  }
-
-  private doesOverlap(
-    intervals: { start: DateTime; end: DateTime }[],
-    start: DateTime,
-    end: DateTime,
-  ): boolean {
-    return intervals.some((i) =>
-      Interval.fromDateTimes(i.start, i.end).overlaps(
-        Interval.fromDateTimes(start, end),
-      ),
-    );
-  }
-
-  private async buildUnavailableMap(
-    staffIds: string[],
-    date: DateTime,
-  ): Promise<Record<string, { start: DateTime; end: DateTime }[]>> {
-    const map: Record<string, { start: DateTime; end: DateTime }[]> = {};
-
-    for (const staffId of staffIds) {
-      const [unavailability, schedules] = await Promise.all([
-        this.prisma.staffAvailability.findMany({
-          where: {
-            staffId,
-            date: date.toJSDate(),
-            isAvailable: false,
-          },
-        }),
-        this.prisma.schedule.findMany({
-          where: {
-            staffId,
-            status: 'scheduled',
-            startTime: { lte: date.endOf('day').toJSDate() },
-            endTime: { gte: date.startOf('day').toJSDate() },
-          },
-        }),
-      ]);
-
-      map[staffId] = [
-        ...unavailability.map((entry) => ({
-          start: DateTime.fromJSDate(entry.startTime, { zone: 'UTC' }),
-          end: DateTime.fromJSDate(entry.endTime, { zone: 'UTC' }),
-        })),
-        ...schedules.map((sch) => ({
-          start: DateTime.fromJSDate(sch.startTime, { zone: 'UTC' }),
-          end: DateTime.fromJSDate(sch.endTime, { zone: 'UTC' }),
-        })),
-      ];
-    }
-
-    return map;
-  }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
     const created = await this.prisma.monthSchedule.createMany({
@@ -1533,4 +1420,35 @@ export function getDurationFromAreaSize(
 ): number {
   const buffer = Number(60);
   return buffer + (area / 500) * durationMinutes;
+}
+
+function generateTimeSlots() {
+  const slots = [];
+  for (let hour = 1; hour <= 22; hour++) {
+    slots.push({
+      time: `${hour.toString().padStart(2, '0')}:00`,
+      isAvailable: true,
+    });
+    slots.push({
+      time: `${hour.toString().padStart(2, '0')}:30`,
+      isAvailable: true,
+    });
+  }
+  return slots;
+}
+
+function simulateFutureDates(startDate: Date, frequencyDays: number): Date[] {
+  const dates = [];
+  for (let i = 0; i < 4; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i * frequencyDays);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function hasConflict(existing: Schedule[], newStart: Date, newEnd: Date) {
+  return existing.some(
+    (s) => !(newEnd <= s.startTime || newStart >= s.endTime),
+  );
 }
