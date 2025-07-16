@@ -147,38 +147,53 @@ export class SchedulerController {
   @Get('time-slots')
   @Public()
   async getTimeSlots(
-    @Query('date') dateRaw?: string,
-    @Query('dayOfWeek') dayOfWeekRaw?: string,
-    @Query('durationMins') durationMinsRaw?: string,
-    @Query('planId') planId?: string,
+    @Query('date') date: string,
+    @Query('planId') planId: string,
+    @Query('durationMins') durationMins: number,
   ) {
-    const date = dateRaw ? new Date(dateRaw) : undefined;
-    const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
-    const durationMins = durationMinsRaw
-      ? parseInt(durationMinsRaw, 10)
-      : undefined;
-
-    if ((!date && dayOfWeek === undefined) || !durationMins) {
-      throw new BadRequestException(
-        'Required: date or dayOfWeek, and durationMins',
-      );
-    }
-
-    if (date && dayOfWeek !== undefined) {
-      throw new BadRequestException(
-        'Provide either date or dayOfWeek, not both',
-      );
-    }
-
-    const slots = await this.schedulerService.getTimeSlots({
+    const slots = await this.schedulerService.getAvailableTimeSlots(
       date,
-      dayOfWeek,
-      durationMins,
       planId,
-    });
-
+      durationMins,
+    );
     return this.resposneService.successResponse('Time slots list', slots);
   }
+
+  // @Get('time-slots')
+  // @Public()
+  // async getTimeSlots(
+  //   @Query('date') dateRaw?: string,
+  //   @Query('dayOfWeek') dayOfWeekRaw?: string,
+  //   @Query('durationMins') durationMinsRaw?: string,
+  //   @Query('planId') planId?: string,
+  // ) {
+  //   const date = dateRaw ? new Date(dateRaw) : undefined;
+  //   const dayOfWeek = dayOfWeekRaw ? parseInt(dayOfWeekRaw, 10) : undefined;
+  //   const durationMins = durationMinsRaw
+  //     ? parseInt(durationMinsRaw, 10)
+  //     : undefined;
+
+  //   if ((!date && dayOfWeek === undefined) || !durationMins) {
+  //     throw new BadRequestException(
+  //       'Required: date or dayOfWeek, and durationMins',
+  //     );
+  //   }
+
+  //   if (date && dayOfWeek !== undefined) {
+  //     throw new BadRequestException(
+  //       'Provide either date or dayOfWeek, not both',
+  //     );
+  //   }
+
+  //   const slots = await this.schedulerService.getTimeSlots({
+  //     date,
+  //     dayOfWeek,
+  //     durationMins,
+  //     planId,
+  //   });
+
+  //   return this.resposneService.successResponse('Time slots list', slots);
+  // }
 
   // async getTimeSlots(
   //   @Query('weekOfMonth') weekOfMonthRaw?: string,
