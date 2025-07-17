@@ -169,22 +169,37 @@ export class SchedulerService {
 
   async getAvailableTimeSlots(
     dateStr: string,
-    planId: string,
+    planId: string | null,
     durationMins: number,
   ) {
-    const plan = await this.prisma.recurringType.findUnique({
-      where: { id: planId },
-    });
-    if (!plan) throw new NotFoundException('Plan not found');
-
     const baseDate = new Date(dateStr);
-    const simulatedDates = simulateFutureDates(baseDate, plan.dayFrequency);
+    let simulatedDates: Date[];
+
+    const plan = planId
+      ? await this.prisma.recurringType.findUnique({ where: { id: planId } })
+      : null;
+
+    // If no plan or invalid planId → treat as one-time
+    if (!plan) {
+      simulatedDates = [baseDate];
+    } else {
+      simulatedDates = simulateFutureDates(baseDate, plan.dayFrequency);
+    }
+
+    const from = new Date(simulatedDates[0]);
+    from.setHours(0, 0, 0, 0);
+
+    const to = new Date(simulatedDates[simulatedDates.length - 1]);
+    to.setHours(23, 59, 59, 999);
 
     const existingSchedules = await this.prisma.schedule.findMany({
       where: {
+        status: {
+          notIn: ['canceled'],
+        },
         startTime: {
-          gte: new Date(simulatedDates[0].setHours(0, 0, 0, 0)),
-          lte: new Date(simulatedDates[3].setHours(23, 59, 59, 999)),
+          gte: from,
+          lte: to,
         },
       },
     });
@@ -205,98 +220,6 @@ export class SchedulerService {
 
     return slots;
   }
-
-  // async getTimeSlots(
-  //   weekOfMonth: number,
-  //   dayOfWeek: number,
-  //   durationMins: number = 60,
-  // ) {
-  //   const today = dayjs().utc().startOf('day');
-  //   const thirtyDaysLater = today.add(30, 'day');
-
-  //   const availableStaffCount = await this.prisma.user.count({
-  //     where: { role: { name: 'staff' } },
-  //   });
-
-  //   const unavailableRanges = await this.prisma.staffAvailability.findMany({
-  //     where: {
-  //       date: {
-  //         gte: today.toDate(),
-  //         lte: thirtyDaysLater.toDate(),
-  //       },
-  //       weekOfMonth,
-  //       dayOfWeek,
-  //       isAvailable: false,
-  //     },
-  //     select: {
-  //       date: true,
-  //       startTime: true,
-  //       endTime: true,
-  //     },
-  //   });
-
-  //   const matchingDates: dayjs.Dayjs[] = [];
-  //   let pointer = today.clone();
-
-  //   while (pointer.isBefore(thirtyDaysLater)) {
-  //     const currentWeekOfMonth = Math.ceil(pointer.date() / 7);
-  //     const currentDayOfWeek = pointer.day();
-  //     if (
-  //       currentWeekOfMonth === weekOfMonth &&
-  //       currentDayOfWeek === dayOfWeek
-  //     ) {
-  //       matchingDates.push(pointer.clone());
-  //     }
-  //     pointer = pointer.add(1, 'day');
-  //   }
-
-  //   const startHour = 9;
-  //   const endHour = 18;
-  //   const interval = 30;
-  //   const slots: { time: string; isAvailable: boolean }[] = [];
-
-  //   for (const date of matchingDates) {
-  //     let current = date.clone().utc().hour(startHour).minute(0).second(0);
-
-  //     while (current.hour() < endHour) {
-  //       const timeStr = current.format('HH:mm');
-  //       const serviceEndTime = current.clone().add(durationMins, 'minute');
-
-  //       const isUnavailable = unavailableRanges.some((range) => {
-  //         const sameDay = dayjs(range.date).utc().isSame(current, 'day');
-  //         if (!sameDay) return false;
-
-  //         const rangeStart = dayjs(range.date)
-  //           .utc()
-  //           .hour(dayjs(range.startTime).utc().hour())
-  //           .minute(dayjs(range.startTime).utc().minute());
-
-  //         const rangeEnd = dayjs(range.date)
-  //           .utc()
-  //           .hour(dayjs(range.endTime).utc().hour())
-  //           .minute(dayjs(range.endTime).utc().minute());
-
-  //         return (
-  //           current.isSame(rangeStart) ||
-  //           (current.isAfter(rangeStart) && current.isBefore(rangeEnd)) ||
-  //           (serviceEndTime.isAfter(rangeStart) &&
-  //             (serviceEndTime.isBefore(rangeEnd) ||
-  //               serviceEndTime.isSame(rangeEnd))) ||
-  //           (current.isBefore(rangeStart) && serviceEndTime.isAfter(rangeEnd))
-  //         );
-  //       });
-
-  //       slots.push({
-  //         time: timeStr,
-  //         isAvailable: availableStaffCount > 0 && !isUnavailable,
-  //       });
-
-  //       current = current.add(interval, 'minute');
-  //     }
-  //   }
-
-  //   return slots;
-
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
     const created = await this.prisma.monthSchedule.createMany({
