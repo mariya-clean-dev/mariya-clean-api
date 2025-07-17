@@ -182,6 +182,9 @@ export class SchedulerService {
 
     const existingSchedules = await this.prisma.schedule.findMany({
       where: {
+        status: {
+          notIn: ['canceled'], 
+        },
         startTime: {
           gte: new Date(simulatedDates[0].setHours(0, 0, 0, 0)),
           lte: new Date(simulatedDates[3].setHours(23, 59, 59, 999)),
@@ -296,7 +299,6 @@ export class SchedulerService {
   //   }
 
   //   return slots;
-
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
     const created = await this.prisma.monthSchedule.createMany({
