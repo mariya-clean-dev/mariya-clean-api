@@ -9,8 +9,15 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api');
 
-  app.enableCors();
-
+  app.enableCors({
+    origin: [
+      'https://cleanmaria.com',
+      'https://staging.cleanmaria.com',
+      'http://localhost:3000',
+    ],
+    credentials: true, // ✅ if you're using cookies/auth
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  });
   // Stripe webhook needs raw body
   app.use(
     '/api/webhooks/stripe',
