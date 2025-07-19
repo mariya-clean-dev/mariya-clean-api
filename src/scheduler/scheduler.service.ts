@@ -179,43 +179,51 @@ export class SchedulerService {
       ? await this.prisma.recurringType.findUnique({ where: { id: planId } })
       : null;
 
-    // If no plan or invalid planId → treat as one-time
-    if (!plan) {
-      simulatedDates = [baseDate];
-    } else {
-      simulatedDates = simulateFutureDates(baseDate, plan.dayFrequency);
-    }
+    simulatedDates = plan
+      ? simulateFutureDates(baseDate, plan.dayFrequency)
+      : [baseDate];
 
     const from = new Date(simulatedDates[0]);
     from.setHours(0, 0, 0, 0);
-
     const to = new Date(simulatedDates[simulatedDates.length - 1]);
     to.setHours(23, 59, 59, 999);
 
-    const existingSchedules = await this.prisma.schedule.findMany({
+    const allSchedules = await this.prisma.schedule.findMany({
       where: {
-        status: {
-          notIn: ['canceled'],
-        },
-        startTime: {
-          gte: from,
-          lte: to,
-        },
+        status: { notIn: ['canceled'] },
+        startTime: { gte: from, lte: to },
       },
     });
 
+    const staffList = await this.prisma.user.findMany({
+      where: { role: { name: 'staff' }, status: 'active' },
+    }); // ✅ Fetch all staff
     const slots = generateTimeSlots();
 
     for (const slot of slots) {
-      const conflicts = simulatedDates.some((date) => {
-        const [hour, minute] = slot.time.split(':').map(Number);
-        const start = new Date(date);
-        start.setHours(hour, minute, 0, 0);
-        const end = new Date(start.getTime() + durationMins * 60000);
-        return hasConflict(existingSchedules, start, end);
-      });
+      const [hour, minute] = slot.time.split(':').map(Number);
 
-      slot.isAvailable = !conflicts;
+      let isSlotAvailable = false;
+
+      for (const staff of staffList) {
+        const staffSchedules = allSchedules.filter(
+          (s) => s.staffId === staff.id,
+        );
+
+        const hasAnyConflict = simulatedDates.some((date) => {
+          const start = new Date(date);
+          start.setHours(hour, minute, 0, 0);
+          const end = new Date(start.getTime() + durationMins * 60000);
+          return hasConflict(staffSchedules, start, end);
+        });
+
+        if (!hasAnyConflict) {
+          isSlotAvailable = true;
+          break; // ✅ No need to check more staff
+        }
+      }
+
+      slot.isAvailable = isSlotAvailable;
     }
 
     return slots;
