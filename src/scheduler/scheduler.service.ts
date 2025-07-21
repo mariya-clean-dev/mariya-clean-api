@@ -100,14 +100,18 @@ export class SchedulerService {
       if (!where.startTime) where.startTime = {};
 
       if (startDate) {
-        const parsedStart = new Date(startDate);
+        const parsedStart = new Date(
+          new Date(startDate).setUTCHours(0, 0, 0, 0),
+        );
         if (!isNaN(parsedStart.getTime())) {
           where.startTime.gte = parsedStart;
         }
       }
 
       if (endDate) {
-        const parsedEnd = new Date(endDate);
+        const parsedEnd = new Date(
+          new Date(endDate).setUTCHours(23, 59, 59, 999),
+        );
         if (!isNaN(parsedEnd.getTime())) {
           where.startTime.lte = parsedEnd;
         }
