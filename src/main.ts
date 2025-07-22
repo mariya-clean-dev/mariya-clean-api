@@ -12,7 +12,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'https://cleanmaria.com',
-      'https://staging.cleanmaria.com',
+      'https://maria-staging.netlify.app',
       'http://localhost:3000',
     ],
     credentials: true, // ✅ if you're using cookies/auth
