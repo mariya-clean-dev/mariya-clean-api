@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards, Request } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ResponseService } from 'src/response/response.service';
+import { BookingHeatmapDto } from '../bookings/dto/booking-heatmap.dto';
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -123,6 +124,32 @@ export class AnalyticsController {
     return this.responseService.successResponse(
       'Bookings Over Time Report',
       trend,
+    );
+  }
+
+  @Get('booking-heatmap')
+  @Roles('admin', 'staff') // Allow both admin and staff
+  async getBookingHeatmapCalendar(
+    @Query() query: BookingHeatmapDto,
+    @Request() req,
+  ) {
+    const { year, month, staffId } = query;
+    
+    // If user is staff, they can only see their own data
+    let filterStaffId = staffId;
+    if (req.user.role === 'staff') {
+      filterStaffId = req.user.id;
+    }
+    
+    const heatmapData = await this.analyticsService.getBookingHeatmapCalendar(
+      year,
+      month,
+      filterStaffId,
+    );
+    
+    return this.responseService.successResponse(
+      'Booking Heatmap Calendar Analytics',
+      heatmapData,
     );
   }
 
