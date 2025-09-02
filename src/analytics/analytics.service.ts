@@ -624,4 +624,110 @@ export class AnalyticsService {
     //   status: 'Canceled',
     // }));
   }
+
+  async getBookingHeatmapCalendar(
+    year: number,
+    month: number,
+    staffId?: string,
+  ) {
+    // Create start and end dates for the specified month
+    const startDate = new Date(year, month - 1, 1); // month is 0-indexed in Date constructor
+    const endDate = new Date(year, month, 0); // Last day of the month
+
+    // Set time boundaries
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    // Build where clause for filtering
+    const whereClause: any = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    // Add staff filter if provided
+    if (staffId) {
+      whereClause.assignedStaffId = staffId;
+    }
+
+    // Get all bookings for the month with staff details
+    const bookings = await this.prisma.booking.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        createdAt: true,
+        assignedStaffId: true,
+        status: true,
+        assignedStaff: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Initialize heatmap data for all days of the month
+    const daysInMonth = endDate.getDate();
+    const heatmapData: { [day: number]: number } = {};
+
+    // Initialize all days with 0 bookings
+    for (let day = 1; day <= daysInMonth; day++) {
+      heatmapData[day] = 0;
+    }
+
+    // Count bookings per day
+    bookings.forEach((booking) => {
+      const day = booking.createdAt.getDate();
+      heatmapData[day]++;
+    });
+
+    // Convert to array format for easier consumption
+    const heatmapArray = Object.entries(heatmapData).map(([day, count]) => {
+      const dateObj = new Date(Date.UTC(year, month - 1, parseInt(day)));
+      return {
+        date: dateObj.toISOString(), // always midnight UTC
+        bookingCount: count,
+      };
+    });
+
+    // Get staff info if filtering by staff
+    let staffInfo = null;
+    if (staffId && bookings.length > 0) {
+      const staffBooking = bookings.find((b) => b.assignedStaff);
+      if (staffBooking?.assignedStaff) {
+        staffInfo = {
+          id: staffBooking.assignedStaff.id,
+          name: staffBooking.assignedStaff.name,
+          email: staffBooking.assignedStaff.email,
+        };
+      }
+    }
+
+    // Calculate summary statistics
+    const totalBookings = bookings.length;
+    const statusBreakdown = bookings.reduce(
+      (acc, booking) => {
+        acc[booking.status] = (acc[booking.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    return {
+      year,
+      month,
+      staffId,
+      staffInfo,
+      totalBookings,
+      statusBreakdown,
+      heatmapData: heatmapArray,
+      monthName: new Date(year, month - 1, 1).toLocaleString('default', {
+        month: 'long',
+      }),
+      daysInMonth,
+    };
+  }
 }
