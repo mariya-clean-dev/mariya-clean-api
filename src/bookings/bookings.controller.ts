@@ -40,6 +40,7 @@ import { SchedulerService } from 'src/scheduler/scheduler.service';
 import { MailService } from 'src/mailer/mailer.service';
 import { stringify } from 'querystring';
 import { RescheduleDto } from './dto/reschedule.dto';
+import { BookingHeatmapDto } from './dto/booking-heatmap.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { getDay } from 'date-fns';
 
@@ -428,5 +429,32 @@ export class BookingsController {
     @Request() req,
   ) {
     return this.bookingsService.createReview(id, req.user.id, createReviewDto);
+  }
+
+  @Get('heatmap/calendar')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'staff')
+  async getBookingHeatmap(
+    @Query() query: BookingHeatmapDto,
+    @Request() req,
+  ) {
+    const { year, month, staffId } = query;
+    
+    // If user is staff, they can only see their own data
+    let filterStaffId = staffId;
+    if (req.user.role === 'staff') {
+      filterStaffId = req.user.id;
+    }
+    
+    const heatmapData = await this.bookingsService.getBookingHeatmap(
+      year,
+      month,
+      filterStaffId,
+    );
+    
+    return this.responseService.successResponse(
+      'Booking heatmap calendar data',
+      heatmapData,
+    );
   }
 }
