@@ -181,13 +181,16 @@ curl -X GET "http://localhost:3000/analytics/booking-heatmap?year=2024&month=1" 
 ## Implementation Details
 
 ### Data Source
-- Booking data is retrieved from the `bookings` table based on the `createdAt` timestamp
-- Staff filtering is applied via the `assignedStaffId` field
+- **Schedule data** is retrieved from the `schedules` table based on the `startTime` timestamp (not booking creation time)
+- This ensures the heatmap shows when work is actually scheduled, not when bookings were created
+- Staff filtering is applied via the `staffId` field in the schedules table
+- Only non-skipped (`isSkipped: false`) and non-canceled schedules are included
 
 ### Performance Considerations
-- The query is optimized to only select necessary fields (`id`, `createdAt`, `assignedStaffId`, `status`)
-- Date filtering is done at the database level for efficiency
+- The query is optimized to only select necessary fields (`id`, `startTime`, `staffId`, `status`, `bookingId`)
+- Date filtering is done at the database level for efficiency using schedule start times
 - Results are aggregated in-memory for heatmap generation
+- Excludes canceled and skipped schedules to show accurate workload
 
 ### Frontend Integration Tips
 

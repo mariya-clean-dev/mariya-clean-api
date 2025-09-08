@@ -638,32 +638,43 @@ export class AnalyticsService {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    // Build where clause for filtering
+    // Build where clause for filtering schedules by their start time
     const whereClause: any = {
-      createdAt: {
+      startTime: {
         gte: startDate,
         lte: endDate,
+      },
+      isSkipped: false, // Only include non-skipped schedules
+      status: {
+        notIn: ['canceled'], // Exclude canceled schedules
       },
     };
 
     // Add staff filter if provided
     if (staffId) {
-      whereClause.assignedStaffId = staffId;
+      whereClause.staffId = staffId;
     }
 
-    // Get all bookings for the month with staff details
-    const bookings = await this.prisma.booking.findMany({
+    // Get all schedules for the month with staff and booking details
+    const schedules = await this.prisma.schedule.findMany({
       where: whereClause,
       select: {
         id: true,
-        createdAt: true,
-        assignedStaffId: true,
+        startTime: true,
+        staffId: true,
         status: true,
-        assignedStaff: {
+        bookingId: true,
+        staff: {
           select: {
             id: true,
             name: true,
             email: true,
+          },
+        },
+        booking: {
+          select: {
+            id: true,
+            status: true,
           },
         },
       },
@@ -673,14 +684,14 @@ export class AnalyticsService {
     const daysInMonth = endDate.getDate();
     const heatmapData: { [day: number]: number } = {};
 
-    // Initialize all days with 0 bookings
+    // Initialize all days with 0 schedules
     for (let day = 1; day <= daysInMonth; day++) {
       heatmapData[day] = 0;
     }
 
-    // Count bookings per day
-    bookings.forEach((booking) => {
-      const day = booking.createdAt.getDate();
+    // Count schedules per day
+    schedules.forEach((schedule) => {
+      const day = schedule.startTime.getDate();
       heatmapData[day]++;
     });
 
@@ -689,28 +700,41 @@ export class AnalyticsService {
       const dateObj = new Date(Date.UTC(year, month - 1, parseInt(day)));
       return {
         date: dateObj.toISOString(), // always midnight UTC
-        bookingCount: count,
+        bookingCount: count, // This represents scheduled work count, not booking creation count
       };
     });
 
     // Get staff info if filtering by staff
     let staffInfo = null;
-    if (staffId && bookings.length > 0) {
-      const staffBooking = bookings.find((b) => b.assignedStaff);
-      if (staffBooking?.assignedStaff) {
+    if (staffId && schedules.length > 0) {
+      const staffSchedule = schedules.find((s) => s.staff);
+      if (staffSchedule?.staff) {
         staffInfo = {
-          id: staffBooking.assignedStaff.id,
-          name: staffBooking.assignedStaff.name,
-          email: staffBooking.assignedStaff.email,
+          id: staffSchedule.staff.id,
+          name: staffSchedule.staff.name,
+          email: staffSchedule.staff.email,
         };
       }
     }
 
-    // Calculate summary statistics
-    const totalBookings = bookings.length;
-    const statusBreakdown = bookings.reduce(
-      (acc, booking) => {
-        acc[booking.status] = (acc[booking.status] || 0) + 1;
+    // Calculate summary statistics based on schedules
+    const totalBookings = schedules.length; // This is actually total scheduled work count
+    const statusBreakdown = schedules.reduce(
+      (acc, schedule) => {
+        // Use schedule status for breakdown
+        acc[schedule.status] = (acc[schedule.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    // Also get booking status breakdown for additional context
+    const bookingStatusBreakdown = schedules.reduce(
+      (acc, schedule) => {
+        const bookingStatus = schedule.booking?.status;
+        if (bookingStatus) {
+          acc[bookingStatus] = (acc[bookingStatus] || 0) + 1;
+        }
         return acc;
       },
       {} as Record<string, number>,
@@ -722,7 +746,8 @@ export class AnalyticsService {
       staffId,
       staffInfo,
       totalBookings,
-      statusBreakdown,
+      statusBreakdown, // Schedule status breakdown
+      bookingStatusBreakdown, // Booking status breakdown for additional context
       heatmapData: heatmapArray,
       monthName: new Date(year, month - 1, 1).toLocaleString('default', {
         month: 'long',
