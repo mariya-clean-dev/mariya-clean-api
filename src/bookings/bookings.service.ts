@@ -737,26 +737,31 @@ export class BookingsService {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    // Build where clause for filtering
+    // Build where clause for filtering schedules by their start time
     const whereClause: any = {
-      createdAt: {
+      startTime: {
         gte: startDate,
         lte: endDate,
+      },
+      isSkipped: false, // Only include non-skipped schedules
+      status: {
+        notIn: ['canceled'], // Exclude canceled schedules
       },
     };
 
     // Add staff filter if provided
     if (staffId) {
-      whereClause.assignedStaffId = staffId;
+      whereClause.staffId = staffId;
     }
 
-    // Get all bookings for the month
-    const bookings = await this.prisma.booking.findMany({
+    // Get all schedules for the month
+    const schedules = await this.prisma.schedule.findMany({
       where: whereClause,
       select: {
         id: true,
-        createdAt: true,
-        assignedStaffId: true,
+        startTime: true,
+        staffId: true,
+        bookingId: true,
       },
     });
 
@@ -764,14 +769,14 @@ export class BookingsService {
     const daysInMonth = endDate.getDate();
     const heatmapData: { [day: number]: number } = {};
 
-    // Initialize all days with 0 bookings
+    // Initialize all days with 0 schedules
     for (let day = 1; day <= daysInMonth; day++) {
       heatmapData[day] = 0;
     }
 
-    // Count bookings per day
-    bookings.forEach((booking) => {
-      const day = booking.createdAt.getDate();
+    // Count schedules per day
+    schedules.forEach((schedule) => {
+      const day = schedule.startTime.getDate();
       heatmapData[day]++;
     });
 
@@ -780,7 +785,7 @@ export class BookingsService {
       const dateObj = new Date(Date.UTC(year, month - 1, parseInt(day)));
       return {
         date: dateObj.toISOString(), // always midnight UTC
-        bookingCount: count,
+        bookingCount: count, // This represents scheduled work count, not booking creation count
       };
     });
 
@@ -788,7 +793,7 @@ export class BookingsService {
       year,
       month,
       staffId,
-      totalBookings: bookings.length,
+      totalBookings: schedules.length, // This is actually total scheduled work count
       heatmapData: heatmapArray,
     };
   }
