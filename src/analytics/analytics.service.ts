@@ -646,7 +646,7 @@ export class AnalyticsService {
       },
       isSkipped: false, // Only include non-skipped schedules
       status: {
-        notIn: ['canceled'], // Exclude canceled schedules
+        notIn: ['canceled', 'rescheduled'], // Exclude canceled and rescheduled schedules
       },
     };
 
