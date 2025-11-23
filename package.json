@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build && cp -r src/mailer/templates dist/mailer/templates",
+    "build": "nest build",
     "clean": "if exist dist rmdir /S /Q dist",
     "build:windows": "npm run clean && nest build && xcopy /E /I /Y src\\mailer\\templates dist\\mailer\\templates",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
