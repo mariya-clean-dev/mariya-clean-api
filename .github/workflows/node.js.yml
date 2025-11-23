@@ -38,5 +38,5 @@ jobs:
             npx prisma generate
             npm run build || echo "Build script missing!"
             npm run prisma:seed
-            pm2 restart maria-api
+            pm2 reload ecosystem.config.js --only maria-api || pm2 start ecosystem.config.js --only maria-api
 
