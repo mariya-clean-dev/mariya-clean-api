@@ -51,13 +51,15 @@ export class SchedulerService {
 
   async findAvailableStaff(startTime: Date, endTime: Date) {
     const allStaff = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' } },
+      where: { role: { name: 'staff' }, status: 'active' },
       orderBy: { priority: 'asc' },
     });
     for (const staff of allStaff) {
       const hasConflict = await this.prisma.schedule.findFirst({
         where: {
           staffId: staff.id,
+          status: { notIn: ['canceled', 'rescheduled'] }, // Exclude canceled and rescheduled schedules
+          isSkipped: false,
           OR: [
             {
               startTime: { lt: endTime },
@@ -194,7 +196,8 @@ export class SchedulerService {
 
     const allSchedules = await this.prisma.schedule.findMany({
       where: {
-        status: { notIn: ['canceled'] },
+        status: { notIn: ['canceled', 'rescheduled'] },
+        isSkipped: false,
         startTime: { gte: from, lte: to },
       },
     });
@@ -681,7 +684,7 @@ export class SchedulerService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           type: ServiceType.recurring,
-          status: { notIn: ['canceled', 'pending'] },
+          status: { notIn: ['canceled', 'pending', 'completed'] }, // Exclude canceled, pending, and completed
           monthSchedules: { some: { dayOfWeek: day, skip: false } },
         },
         include: {
@@ -963,6 +966,9 @@ export class SchedulerService {
           gte: startOfDay,
           lte: endOfDay,
         },
+        status: {
+          notIn: ['canceled', 'rescheduled'], // Exclude canceled and rescheduled schedules
+        },
       },
     });
   }
@@ -1160,6 +1166,7 @@ export class SchedulerService {
     const conflictingSchedules = await this.prisma.schedule.findMany({
       where: {
         isSkipped: false, // exclude skipped schedules
+        status: { notIn: ['canceled', 'rescheduled'] }, // exclude canceled and rescheduled
         startTime: { lt: endTime },
         endTime: { gt: startTime },
       },
