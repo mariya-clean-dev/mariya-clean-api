@@ -587,14 +587,16 @@ export class BookingsService {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Cancel all future schedules
+      // Cancel all future schedules (including those with other statuses)
       const canceledSchedules = await this.prisma.schedule.updateMany({
         where: {
           bookingId: id,
           startTime: {
             gte: today,
           },
-          status: 'scheduled',
+          status: {
+            notIn: ['completed', 'canceled'], // Don't update already completed or canceled
+          },
         },
         data: {
           isSkipped: true,
