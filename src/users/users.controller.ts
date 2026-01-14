@@ -19,6 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UpdateAddressDto } from './dto/update-address.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { CheckPincodeDto } from './dto/check-pincode.dto';
 import { ResponseService } from 'src/response/response.service';
 
 @Controller('users')
@@ -121,5 +122,16 @@ export class UsersController {
   @Patch('address/:id/default')
   async setDefaultAddress(@Request() req, @Param('id') id: string) {
     return this.usersService.setDefaultAddress(req.user.id, id);
+  }
+
+  // Pincode check endpoint
+  @Post('check-pincode')
+  @Public()
+  async checkPincode(@Body() checkPincodeDto: CheckPincodeDto) {
+    const result =
+      await this.usersService.checkPincodeAndSaveLead(checkPincodeDto);
+    return this.responseService.successResponse(result.message, {
+      success: result.success,
+    });
   }
 }
