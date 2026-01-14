@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CheckPincodeDto } from './dto/check-pincode.dto';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import { StripeService } from 'src/stripe/stripe.service';
@@ -358,5 +359,54 @@ export class UsersService {
     });
 
     return updatedAddress;
+  }
+
+  async checkPincodeAndSaveLead(checkPincodeDto: CheckPincodeDto) {
+    const { name, email, pincode } = checkPincodeDto;
+
+    // Hardcoded list of accessible pincodes
+    const accessiblePincodes = [
+      '10001', // New York, NY
+      '10002',
+      '10003',
+      '90001', // Los Angeles, CA
+      '90002',
+      '90003',
+      '60601', // Chicago, IL
+      '60602',
+      '77001', // Houston, TX
+      '77002',
+      '33101', // Miami, FL
+      '33102',
+    ];
+
+    // Normalize pincode (remove extended zip if present)
+    const normalizedPincode = pincode.split('-')[0];
+
+    // Check if pincode is in the accessible list
+    const isAccessible = accessiblePincodes.includes(normalizedPincode);
+
+    // Save lead to database
+    await this.prisma.lead.create({
+      data: {
+        name,
+        email,
+        pincode: normalizedPincode,
+      },
+    });
+
+    // Return response based on pincode check
+    if (isAccessible) {
+      return {
+        success: true,
+        message: 'Great news! We provide services in your area.',
+      };
+    } else {
+      return {
+        success: false,
+        message:
+          'We are not currently servicing your area, but we have saved your information and will notify you when we expand to your location.',
+      };
+    }
   }
 }

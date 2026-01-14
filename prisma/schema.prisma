@@ -441,3 +441,14 @@ model BookingAddOn {
 
   @@map("booking_add_ons")
 }
+
+model Lead {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  pincode   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
