@@ -1,0 +1,454 @@
+{
+  "info": {
+    "name": "Maria Cleaning Service - Zone-Based API",
+    "description": "Complete API collection for zone management, zone-based bookings, and staff assignment",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "zone_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staff_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "service_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Zones Management",
+      "item": [
+        {
+          "name": "Create Zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Manhattan\",\n  \"code\": \"NYC-DT-001\",\n  \"isActive\": true,\n  \"slotMultiplier\": 1.0,\n  \"maxBookingsPerSlot\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zones",
+              "host": ["{{base_url}}"],
+              "path": ["zones"]
+            },
+            "description": "Create a new service zone.\n\n**Required Role:** Admin\n\n**Fields:**\n- `name`: Zone name (e.g., \"Downtown Manhattan\")\n- `code`: Unique zone code (e.g., \"NYC-DT-001\")\n- `isActive`: Zone status (default: true)\n- `slotMultiplier`: Slot capacity multiplier (default: 1.0)\n- `maxBookingsPerSlot`: Max concurrent bookings (default: 1)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Zones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones?includeInactive=false",
+              "host": ["{{base_url}}"],
+              "path": ["zones"],
+              "query": [
+                {
+                  "key": "includeInactive",
+                  "value": "false",
+                  "description": "Set to 'true' to include inactive/deleted zones"
+                }
+              ]
+            },
+            "description": "Get all zones with counts of pincodes, staff, and bookings.\n\n**Required Role:** Admin or Staff"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Zone by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones/{{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "{{zone_id}}"]
+            },
+            "description": "Get detailed information about a specific zone including:\n- All active pincodes\n- Assigned staff members\n- Booking count\n\n**Required Role:** Admin or Staff"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Zone",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Manhattan - Updated\",\n  \"isActive\": true,\n  \"maxBookingsPerSlot\": 3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zones/{{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "{{zone_id}}"]
+            },
+            "description": "Update zone details. All fields are optional.\n\n**Required Role:** Admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Zone (Soft Delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones/{{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "{{zone_id}}"]
+            },
+            "description": "Soft delete a zone. Sets:\n- `isActive` to false\n- `deletedAt` to current timestamp\n\nZone data is preserved but excluded from queries.\n\n**Required Role:** Admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Check Pincode Serviceability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones/check-pincode/10001",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "check-pincode", "10001"]
+            },
+            "description": "Check if a pincode is serviced and get zone information.\n\n**Response:**\n- `serviced`: Boolean indicating if pincode is serviced\n- `zone`: Zone details (if serviced)\n- `message`: Status message\n\n**Public endpoint** - No authentication required"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Staff in Zone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones/{{zone_id}}/staff",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "{{zone_id}}", "staff"]
+            },
+            "description": "Get all staff members assigned to a specific zone.\n\n**Returns:**\n- Staff ID, name, email, phone\n- Status and priority\n\n**Required Role:** Admin or Staff"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for managing service zones"
+    },
+    {
+      "name": "Staff Zone Assignment",
+      "item": [
+        {
+          "name": "Assign Staff to Zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staffId\": \"{{staff_id}}\",\n  \"zoneId\": \"{{zone_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zones/staff",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "staff"]
+            },
+            "description": "Assign or reassign a staff member to a zone.\n\n**Important:**\n- Each staff can only be in ONE zone\n- If staff already has a zone, this will reassign them\n- Staff must have 'staff' role\n\n**Required Role:** Admin"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for managing staff-zone assignments"
+    },
+    {
+      "name": "Pincode Management",
+      "item": [
+        {
+          "name": "Add Pincode to Zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"10001\",\n  \"zoneId\": \"{{zone_id}}\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zones/pincodes",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "pincodes"]
+            },
+            "description": "Add a new pincode to a zone.\n\n**Format:**\n- US ZIP code: 12345 or 12345-6789\n\n**Validation:**\n- Pincode must be unique\n- Zone must exist\n\n**Required Role:** Admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Pincodes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones/pincodes/list?zoneId={{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["zones", "pincodes", "list"],
+              "query": [
+                {
+                  "key": "zoneId",
+                  "value": "{{zone_id}}",
+                  "description": "Optional: Filter by specific zone ID"
+                }
+              ]
+            },
+            "description": "Get all active pincodes.\n\n**Query Parameters:**\n- `zoneId`: Optional filter by zone\n\n**Returns:** List of pincodes with zone details\n\n**Required Role:** Admin or Staff"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for managing pincodes within zones"
+    },
+    {
+      "name": "Bookings (Zone-Enhanced)",
+      "item": [
+        {
+          "name": "Create Booking with Zone Validation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"{{service_id}}\",\n  \"type\": \"one_time\",\n  \"paymentMethod\": \"online\",\n  \"date\": \"2026-02-01T10:00:00Z\",\n  \"time\": \"10:00\",\n  \"areaSize\": 1000,\n  \"no_of_rooms\": 2,\n  \"no_of_bathrooms\": 1,\n  \"isEco\": false,\n  \"propertyType\": \"apartment\",\n  \"materialProvided\": false,\n  \"price\": 150.00,\n  \"address\": {\n    \"addressLine1\": \"123 Main Street\",\n    \"addressLine2\": \"Apt 4B\",\n    \"street\": \"Main Street\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zip\": \"10001\",\n    \"landmark\": \"Near Central Park\",\n    \"specialInstructions\": \"Ring doorbell twice\"\n  },\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"phone\": \"+1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"]
+            },
+            "description": "Create a new booking with automatic zone assignment.\n\n**Zone Integration:**\n1. System validates pincode from `address.zip`\n2. Automatically assigns booking to appropriate zone\n3. Returns error if pincode is not serviced\n\n**Booking Types:**\n- `one_time`: Single service\n- `recurring`: Subscription-based service\n\n**Public endpoint** - Creates or finds user"
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Staff to Booking (Zone Validated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staffId\": \"{{staff_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/bookings/{{booking_id}}/assign-staff",
+              "host": ["{{base_url}}"],
+              "path": ["bookings", "{{booking_id}}", "assign-staff"]
+            },
+            "description": "Assign staff to a booking with zone validation.\n\n**Zone Validation:**\n- System checks staff's assigned zone\n- Validates staff zone matches booking zone\n- Returns error if zones don't match\n\n**Error Example:**\n\"Staff John is not assigned to the zone for this booking. Booking zone: Manhattan, Staff zone: Brooklyn\"\n\n**Required Role:** Admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"]
+            },
+            "description": "Get all bookings (filtered by role).\n\n**Role-based filtering:**\n- Admin: All bookings\n- Staff: Only their assigned bookings\n- Customer: Only their bookings\n\n**Includes:** Zone information for each booking"
+          },
+          "response": []
+        }
+      ],
+      "description": "Enhanced booking endpoints with automatic zone validation"
+    },
+    {
+      "name": "Scheduler (Zone-Enhanced)",
+      "item": [
+        {
+          "name": "Get Available Time Slots (with Pincode)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/scheduler/available-slots?date=2026-02-01&planId=&durationMins=120&pincode=10001",
+              "host": ["{{base_url}}"],
+              "path": ["scheduler", "available-slots"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-02-01",
+                  "description": "Date in YYYY-MM-DD format"
+                },
+                {
+                  "key": "planId",
+                  "value": "",
+                  "description": "Optional: Recurring plan ID for multi-date simulation"
+                },
+                {
+                  "key": "durationMins",
+                  "value": "120",
+                  "description": "Service duration in minutes"
+                },
+                {
+                  "key": "pincode",
+                  "value": "10001",
+                  "description": "Customer pincode - filters staff by zone"
+                }
+              ]
+            },
+            "description": "Get available time slots for a specific date.\n\n**Zone Filtering:**\n- If `pincode` provided: Only shows slots for staff in that zone\n- If no pincode: Shows all available staff\n\n**Returns:**\n- Time slots from 8:00 AM to 6:30 PM\n- Each slot marked as available/unavailable\n\n**Time slots:** 30-minute intervals"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recurring Time Slots (with Pincode)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-02-01\",\n  \"dayOfWeek\": 1,\n  \"serviceId\": \"{{service_id}}\",\n  \"durationMins\": 120,\n  \"timezone\": \"America/New_York\",\n  \"pincode\": \"10001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/scheduler/recurring-slots",
+              "host": ["{{base_url}}"],
+              "path": ["scheduler", "recurring-slots"]
+            },
+            "description": "Get available time slots for recurring bookings over next 60 days.\n\n**Parameters:**\n- `dayOfWeek`: 0 (Sunday) to 6 (Saturday)\n- `pincode`: Optional - filters staff by zone\n\n**Zone Filtering:**\n- If pincode provided: Only staff from that zone\n- Returns slots for matching day of week\n\n**Returns:** Map of dates with available time slots"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/scheduler/schedules?page=1&limit=10&startDate=2026-02-01",
+              "host": ["{{base_url}}"],
+              "path": ["scheduler", "schedules"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-02-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-02-28",
+                  "disabled": true
+                },
+                {
+                  "key": "staffId",
+                  "value": "{{staff_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "bookingId",
+                  "value": "{{booking_id}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get paginated list of schedules with filtering options.\n\n**Includes:** Zone information through booking relationship"
+          },
+          "response": []
+        }
+      ],
+      "description": "Enhanced scheduler endpoints with zone-based staff filtering"
+    },
+    {
+      "name": "Setup & Testing",
+      "item": [
+        {
+          "name": "Complete Setup Flow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/zones",
+              "host": ["{{base_url}}"],
+              "path": ["zones"]
+            },
+            "description": "# Complete Zone Setup Workflow\n\n## Step 1: Create Zones\n```\nPOST /zones\n{\n  \"name\": \"Manhattan Downtown\",\n  \"code\": \"NYC-DT-001\"\n}\n```\nSave the returned `zone_id`\n\n## Step 2: Add Pincodes\n```\nPOST /zones/pincodes\n{\n  \"code\": \"10001\",\n  \"zoneId\": \"<zone_id>\"\n}\n```\nRepeat for all pincodes in this zone\n\n## Step 3: Assign Staff\n```\nPOST /zones/staff\n{\n  \"staffId\": \"<staff_id>\",\n  \"zoneId\": \"<zone_id>\"\n}\n```\nEach staff can only be in one zone\n\n## Step 4: Test Pincode\n```\nGET /zones/check-pincode/10001\n```\nVerify pincode is serviced\n\n## Step 5: Create Booking\n```\nPOST /bookings\n{\n  \"address\": {\n    \"zip\": \"10001\"\n    ...\n  }\n  ...\n}\n```\nSystem auto-assigns zone\n\n## Step 6: Assign Staff\n```\nPOST /bookings/<booking_id>/assign-staff\n{\n  \"staffId\": \"<staff_id>\"\n}\n```\nValidates staff is in correct zone\n\n## Automatic Features:\n✅ Pincode validation during booking\n✅ Auto-assignment of zone to bookings\n✅ Staff filtering by zone\n✅ Prevention of cross-zone assignments\n✅ Zone-aware time slot queries"
+          },
+          "response": []
+        }
+      ],
+      "description": "Documentation and setup workflows"
+    }
+  ]
+}

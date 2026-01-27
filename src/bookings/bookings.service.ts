@@ -9,6 +9,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ZonesService } from '../zones/zones.service';
 import dayjs from 'dayjs';
 import { RescheduleDto } from './dto/reschedule.dto';
 
@@ -17,6 +18,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly zonesService: ZonesService,
   ) {}
 
   async create(createBookingDto: CreateBookingDto, userId: string) {
@@ -71,6 +73,17 @@ export class BookingsService {
       }
     }
 
+    // Validate pincode and get zone
+    const zone = await this.zonesService.validatePincode(
+      createBookingDto.address.zip,
+    );
+
+    if (!zone) {
+      throw new BadRequestException(
+        `Pincode ${createBookingDto.address.zip} is not currently serviced. Please check available service areas.`,
+      );
+    }
+
     const formattedAddress = {
       line_1: createBookingDto.address.addressLine1,
       line_2: createBookingDto.address.addressLine2,
@@ -84,7 +97,7 @@ export class BookingsService {
       ...createBookingDto.address,
       ...formattedAddress,
     };
-    // Create booking
+    // Create booking with zone assignment
     const booking = await this.prisma.booking.create({
       data: {
         userId,
@@ -100,6 +113,7 @@ export class BookingsService {
         status: BookingStatus.booked,
         date: createBookingDto.date ? new Date(createBookingDto.date) : null,
         price: updatedPrice,
+        zoneId: zone.id,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
           : null,
@@ -498,6 +512,7 @@ export class BookingsService {
       where: { id: bookingId },
       include: {
         schedules: true,
+        zone: true,
       },
     });
 
@@ -519,6 +534,17 @@ export class BookingsService {
       throw new NotFoundException(
         `Staff with ID ${staffId} not found or user is not staff`,
       );
+    }
+
+    // Validate staff belongs to booking's zone
+    if (booking.zoneId) {
+      const staffZone = await this.zonesService.getStaffZone(staffId);
+
+      if (!staffZone || staffZone.id !== booking.zoneId) {
+        throw new BadRequestException(
+          `Staff ${staff.name} is not assigned to the zone for this booking. Booking zone: ${booking.zone?.name || 'Unknown'}, Staff zone: ${staffZone?.name || 'Not assigned'}`,
+        );
+      }
     }
 
     // Update schedule if it exists

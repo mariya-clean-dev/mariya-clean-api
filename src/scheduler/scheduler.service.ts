@@ -49,9 +49,21 @@ export class SchedulerService {
     private readonly paymentsService: PaymentsService,
   ) {}
 
-  async findAvailableStaff(startTime: Date, endTime: Date) {
+  async findAvailableStaff(startTime: Date, endTime: Date, zoneId?: string) {
+    const where: any = {
+      role: { name: 'staff' },
+      status: 'active',
+    };
+
+    // Filter by zone if provided
+    if (zoneId) {
+      where.staffZone = {
+        zoneId,
+      };
+    }
+
     const allStaff = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' }, status: 'active' },
+      where,
       orderBy: { priority: 'asc' },
     });
     for (const staff of allStaff) {
@@ -177,9 +189,38 @@ export class SchedulerService {
     dateStr: string,
     planId: string | null,
     durationMins: number,
+    pincode?: string,
   ) {
     const baseDate = new Date(dateStr);
     let simulatedDates: Date[];
+    let zoneId: string | undefined;
+
+    // Validate pincode if provided
+    if (pincode) {
+      const pincodeRecord = await this.prisma.pincode.findFirst({
+        where: {
+          code: pincode,
+          isActive: true,
+          deletedAt: null,
+        },
+        include: {
+          zone: {
+            where: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+      });
+
+      if (!pincodeRecord || !pincodeRecord.zone) {
+        throw new BadRequestException(
+          `Pincode ${pincode} is not currently serviced`,
+        );
+      }
+
+      zoneId = pincodeRecord.zone.id;
+    }
 
     const plan = planId
       ? await this.prisma.recurringType.findUnique({ where: { id: planId } })
@@ -202,9 +243,21 @@ export class SchedulerService {
       },
     });
 
+    // Fetch staff filtered by zone if provided
+    const staffWhere: any = {
+      role: { name: 'staff' },
+      status: 'active',
+    };
+
+    if (zoneId) {
+      staffWhere.staffZone = {
+        zoneId,
+      };
+    }
+
     const staffList = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' }, status: 'active' },
-    }); // ✅ Fetch all staff
+      where: staffWhere,
+    }); // ✅ Fetch staff in zone
     const slots = generateTimeSlots();
 
     for (const slot of slots) {
@@ -1126,16 +1179,25 @@ export class SchedulerService {
     dayOfWeek: number,
     startTime: Date,
     endTime: Date,
+    zoneId?: string,
   ) {
     const isoDate = date.toISOString().split('T')[0]; // extract YYYY-MM-DD
     const dayStart = new Date(`${isoDate}T00:00:00.000Z`);
 
-    // 🔍 Step 1: Get all active staff ordered by priority
+    // 🔍 Step 1: Get all active staff ordered by priority, filtered by zone
+    const where: any = {
+      role: { name: 'staff' },
+      status: 'active',
+    };
+
+    if (zoneId) {
+      where.staffZone = {
+        zoneId,
+      };
+    }
+
     const allStaffs = await this.prisma.user.findMany({
-      where: {
-        role: { name: 'staff' },
-        status: 'active',
-      },
+      where,
       orderBy: { priority: 'asc' },
       select: { id: true, name: true, priority: true },
     });
@@ -1201,12 +1263,14 @@ export class SchedulerService {
     serviceId,
     durationMins,
     timezone = DEFAULT_TIMEZONE,
+    pincode,
   }: {
     startDate: string; // "YYYY-MM-DD"
     dayOfWeek: number; // 0-6 (Sunday to Saturday)
     serviceId: string;
     durationMins?: number;
     timezone?: string;
+    pincode?: string;
   }) {
     const bufferMins = 30;
     const defaultDuration = 120;
@@ -1214,6 +1278,35 @@ export class SchedulerService {
     const interval = 30;
     const startHour = 9;
     const endHour = 18;
+
+    let zoneId: string | undefined;
+
+    // Validate pincode if provided
+    if (pincode) {
+      const pincodeRecord = await this.prisma.pincode.findFirst({
+        where: {
+          code: pincode,
+          isActive: true,
+          deletedAt: null,
+        },
+        include: {
+          zone: {
+            where: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+      });
+
+      if (!pincodeRecord || !pincodeRecord.zone) {
+        throw new BadRequestException(
+          `Pincode ${pincode} is not currently serviced`,
+        );
+      }
+
+      zoneId = pincodeRecord.zone.id;
+    }
 
     const service = await this.prisma.service.findUnique({
       where: { id: serviceId },
@@ -1223,8 +1316,19 @@ export class SchedulerService {
       (durationMins ?? service?.durationMinutes ?? defaultDuration) +
       bufferMins;
 
+    // Filter staff by zone if provided
+    const staffWhere: any = {
+      role: { name: 'staff' },
+    };
+
+    if (zoneId) {
+      staffWhere.staffZone = {
+        zoneId,
+      };
+    }
+
     const staffs = await this.prisma.user.findMany({
-      where: { role: { name: 'staff' } },
+      where: staffWhere,
       select: { id: true },
     });
 
