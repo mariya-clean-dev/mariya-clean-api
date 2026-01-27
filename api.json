@@ -1,0 +1,1735 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Maria Cleaning Service API",
+    "description": "REST API for Maria Cleaning Service with zone-based booking system, recurring schedules, and staff management",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@mariacleaning.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentication endpoints"
+    },
+    {
+      "name": "Users",
+      "description": "User management endpoints"
+    },
+    {
+      "name": "Regions",
+      "description": "Region/Zone management for service areas"
+    },
+    {
+      "name": "Services",
+      "description": "Cleaning service management"
+    },
+    {
+      "name": "Bookings",
+      "description": "Booking management with zone-based scheduling"
+    },
+    {
+      "name": "Scheduler",
+      "description": "Schedule and availability management"
+    },
+    {
+      "name": "Payments",
+      "description": "Payment processing and transactions"
+    },
+    {
+      "name": "Subscriptions",
+      "description": "Recurring subscription management"
+    },
+    {
+      "name": "Notifications",
+      "description": "User notifications"
+    },
+    {
+      "name": "Analytics",
+      "description": "Business analytics and reports"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": { "type": "string" },
+                    "user": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" },
+                  "phone": { "type": "string" }
+                },
+                "required": ["name", "email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User registered successfully" }
+        }
+      }
+    },
+    "/auth/otp/generate": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Generate OTP for passwordless login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                },
+                "required": ["email"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP sent to email" }
+        }
+      }
+    },
+    "/auth/otp/verify": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify OTP and login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "otp": { "type": "string" }
+                },
+                "required": ["email", "otp"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP verified, user logged in" }
+        }
+      }
+    },
+    "/regions": {
+      "get": {
+        "tags": ["Regions"],
+        "summary": "Get all regions/zones",
+        "description": "Public endpoint to retrieve all available service regions/zones",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "List of regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Region" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Regions"],
+        "summary": "Create new region/zone",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "example": "Downtown Manhattan" }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Region created successfully" }
+        }
+      }
+    },
+    "/regions/{id}": {
+      "get": {
+        "tags": ["Regions"],
+        "summary": "Get region by ID",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Region details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Region" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Regions"],
+        "summary": "Update region",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Region updated successfully" }
+        }
+      },
+      "delete": {
+        "tags": ["Regions"],
+        "summary": "Delete region",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Region deleted successfully" }
+        }
+      }
+    },
+    "/regions/assign-user": {
+      "post": {
+        "tags": ["Regions"],
+        "summary": "Assign staff to region",
+        "description": "Assign a staff member to work in a specific region/zone",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "regionId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "User assigned to region successfully" }
+        }
+      }
+    },
+    "/regions/remove-user": {
+      "delete": {
+        "tags": ["Regions"],
+        "summary": "Remove staff from region",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "regionId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "User removed from region successfully" }
+        }
+      }
+    },
+    "/regions/user/{userId}": {
+      "get": {
+        "tags": ["Regions"],
+        "summary": "Get user's assigned regions",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of regions assigned to user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Region" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/check-pincode": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Check if service is available in pincode",
+        "description": "Check service availability by pincode and save as lead",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pincode": { "type": "string" },
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" }
+                },
+                "required": ["pincode"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pincode check result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/services": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Get all services",
+        "security": [],
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of services",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Service" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Services"],
+        "summary": "Create new service",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateServiceDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Service created successfully" }
+        }
+      }
+    },
+    "/services/price-estimate": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Get price estimate",
+        "description": "Calculate price based on service parameters",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "service_id": { "type": "string" },
+                  "square_feet": { "type": "number" },
+                  "no_of_rooms": { "type": "number" },
+                  "no_of_bathrooms": { "type": "number" },
+                  "isEcoCleaning": { "type": "boolean" },
+                  "materialsProvidedByClient": { "type": "boolean" }
+                },
+                "required": ["service_id", "square_feet"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Price estimate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "estimatedPrice": { "type": "number" },
+                    "breakdown": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bookings": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Get all bookings",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["booked", "pending", "in_progress", "completed", "rejected", "canceled"]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["one_time", "recurring"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of bookings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Booking" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Create new booking",
+        "description": "Create a new booking with zone-based scheduling support",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateBookingDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking": { "$ref": "#/components/schemas/Booking" },
+                    "stripe": {
+                      "type": "object",
+                      "properties": {
+                        "checkoutUrl": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{id}": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Get booking by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Booking" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Bookings"],
+        "summary": "Update booking",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateBookingDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Booking updated successfully" }
+        }
+      }
+    },
+    "/bookings/{id}/assign": {
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Assign staff to booking",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "staffId": { "type": "string" }
+                },
+                "required": ["staffId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Staff assigned successfully" }
+        }
+      }
+    },
+    "/bookings/{id}/cancel": {
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Cancel booking",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Booking canceled successfully" }
+        }
+      }
+    },
+    "/bookings/{id}/review": {
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Create review for booking",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+                  "review": { "type": "string" }
+                },
+                "required": ["rating"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Review created successfully" }
+        }
+      }
+    },
+    "/bookings/heatmap/calendar": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Get booking heatmap calendar",
+        "description": "Get calendar heatmap showing booking density for staff scheduling",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "minimum": 1, "maximum": 12 }
+          },
+          {
+            "name": "staffId",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Heatmap calendar data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "heatmap": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduler/time-slots": {
+      "get": {
+        "tags": ["Scheduler"],
+        "summary": "Get available time slots for one-time booking",
+        "description": "Get available time slots for a specific date based on staff availability",
+        "security": [],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2024-03-15"
+          },
+          {
+            "name": "planId",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "durationMins",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number" },
+            "example": 120
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available time slots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "time": { "type": "string", "example": "09:00" },
+                          "isAvailable": { "type": "boolean" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduler/recurring-time-slots": {
+      "get": {
+        "tags": ["Scheduler"],
+        "summary": "Get recurring booking time slots",
+        "description": "Get available time slots for recurring bookings based on day of week across multiple dates",
+        "security": [],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "example": "2024-03-15"
+          },
+          {
+            "name": "dayOfWeek",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "minimum": 0, "maximum": 6 },
+            "description": "0 = Sunday, 6 = Saturday",
+            "example": 1
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "durationMins",
+            "in": "query",
+            "schema": { "type": "number" },
+            "example": 120
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "schema": { "type": "string" },
+            "example": "America/New_York"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available recurring time slots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "slots": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "time": { "type": "string", "example": "09:00" },
+                            "isAvailable": { "type": "boolean" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduler/schedules": {
+      "get": {
+        "tags": ["Scheduler"],
+        "summary": "Get schedules",
+        "description": "Get schedules with optional filters for staff, booking, status, and date range",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "staffId",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "bookingId",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["scheduled", "in_progress", "completed", "missed", "canceled", "rescheduled"]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "number", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "number", "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of schedules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Schedule" }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "number" },
+                        "page": { "type": "number" },
+                        "limit": { "type": "number" },
+                        "totalPages": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduler/schedules/{id}": {
+      "get": {
+        "tags": ["Scheduler"],
+        "summary": "Get schedule by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Schedule" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Scheduler"],
+        "summary": "Update schedule",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startTime": { "type": "string", "format": "date-time" },
+                  "endTime": { "type": "string", "format": "date-time" },
+                  "status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Schedule updated successfully" }
+        }
+      },
+      "delete": {
+        "tags": ["Scheduler"],
+        "summary": "Delete schedule",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Schedule deleted successfully" }
+        }
+      }
+    },
+    "/scheduler/schedules/{id}/change-status": {
+      "patch": {
+        "tags": ["Scheduler"],
+        "summary": "Change schedule status",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["scheduled", "in_progress", "completed", "missed", "canceled"]
+                  }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Schedule status updated successfully" }
+        }
+      }
+    },
+    "/scheduler/reschedule/{id}": {
+      "patch": {
+        "tags": ["Scheduler"],
+        "summary": "Reschedule a booking schedule",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newDate": { "type": "string", "format": "date" },
+                  "newTime": { "type": "string", "example": "14:00" }
+                },
+                "required": ["newDate", "newTime"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Schedule rescheduled successfully" }
+        }
+      }
+    },
+    "/scheduler/auto-schedules": {
+      "post": {
+        "tags": ["Scheduler"],
+        "summary": "Auto-generate schedules",
+        "description": "Automatically generate schedules for a date range",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Schedules generated successfully" }
+        }
+      }
+    },
+    "/scheduler/generate-schedules-for-booking/{bookingId}": {
+      "post": {
+        "tags": ["Scheduler"],
+        "summary": "Generate schedules for specific booking",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "numberOfDays": { "type": "number" },
+                  "startDate": { "type": "string", "format": "date" }
+                },
+                "required": ["numberOfDays"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Schedules generated for booking" }
+        }
+      }
+    },
+    "/payments": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Get all transactions",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Transaction" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/process": {
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Process payment",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bookingId": { "type": "string" },
+                  "paymentMethodId": { "type": "string" }
+                },
+                "required": ["bookingId", "paymentMethodId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment processed successfully" }
+        }
+      }
+    },
+    "/payments/refund": {
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Process refund",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "transactionId": { "type": "string" },
+                  "amount": { "type": "number" }
+                },
+                "required": ["transactionId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Refund processed successfully" }
+        }
+      }
+    },
+    "/payments/methods": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Get saved payment methods",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of payment methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "type": { "type": "string" },
+                      "last4": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Add payment method",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paymentMethodId": { "type": "string" }
+                },
+                "required": ["paymentMethodId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment method added successfully" }
+        }
+      }
+    },
+    "/payments/setup-intent": {
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Create setup intent for adding payment method",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Setup intent created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientSecret": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions": {
+      "get": {
+        "tags": ["Subscriptions"],
+        "summary": "Get all subscriptions",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Subscription" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Create subscription",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serviceId": { "type": "string" },
+                  "recurringType": {
+                    "type": "string",
+                    "enum": ["daily", "weekly", "bi_weekly", "monthly"]
+                  },
+                  "recurringFrequency": { "type": "number" }
+                },
+                "required": ["serviceId", "recurringType"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Subscription created successfully" }
+        }
+      }
+    },
+    "/subscriptions/types": {
+      "get": {
+        "tags": ["Subscriptions"],
+        "summary": "Get subscription types",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "List of subscription types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string" },
+                      "dayFrequency": { "type": "number" },
+                      "available_discount": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/{id}/pause": {
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Pause subscription",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Subscription paused successfully" }
+        }
+      }
+    },
+    "/subscriptions/{id}/resume": {
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Resume subscription",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Subscription resumed successfully" }
+        }
+      }
+    },
+    "/subscriptions/{id}/cancel": {
+      "post": {
+        "tags": ["Subscriptions"],
+        "summary": "Cancel subscription",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Subscription canceled successfully" }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get user notifications",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Notification" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get unread notification count",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark notification as read",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Notification marked as read" }
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "All notifications marked as read" }
+        }
+      }
+    },
+    "/analytics/business-overview": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get business overview",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business overview report"
+          }
+        }
+      }
+    },
+    "/analytics/staff-performance": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get staff performance metrics",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "staffId",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Staff performance report"
+          }
+        }
+      }
+    },
+    "/analytics/booking-heatmap": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get booking heatmap analytics",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "staffId",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking heatmap data"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "phone": { "type": "string" },
+          "role": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "disabled"] }
+        }
+      },
+      "Region": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Service": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "durationMinutes": { "type": "number" },
+          "base_price": { "type": "number" },
+          "bathroom_rate": { "type": "number" },
+          "room_rate": { "type": "number" },
+          "square_foot_price": { "type": "number" },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "CreateServiceDto": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "durationMinutes": { "type": "number" },
+          "base_price": { "type": "number" },
+          "bathroom_rate": { "type": "number" },
+          "room_rate": { "type": "number" },
+          "square_foot_price": { "type": "number" }
+        },
+        "required": ["name", "durationMinutes", "base_price"]
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "serviceId": { "type": "string" },
+          "type": { "type": "string", "enum": ["one_time", "recurring"] },
+          "status": { "type": "string", "enum": ["booked", "pending", "in_progress", "completed", "rejected", "canceled"] },
+          "paymentMethod": { "type": "string", "enum": ["online", "offline", "subscription"] },
+          "areaSize": { "type": "number" },
+          "noOfRooms": { "type": "number" },
+          "noOfBathRooms": { "type": "number" },
+          "propertyType": { "type": "string" },
+          "price": { "type": "number" },
+          "date": { "type": "string", "format": "date-time" },
+          "isEco": { "type": "boolean" },
+          "materialProvided": { "type": "boolean" }
+        }
+      },
+      "CreateBookingDto": {
+        "type": "object",
+        "properties": {
+          "serviceId": { "type": "string" },
+          "type": { "type": "string", "enum": ["one_time", "recurring"] },
+          "paymentMethod": { "type": "string", "enum": ["online", "offline", "subscription"] },
+          "date": { "type": "string", "format": "date" },
+          "time": { "type": "string", "example": "14:00" },
+          "areaSize": { "type": "number" },
+          "no_of_rooms": { "type": "number" },
+          "no_of_bathrooms": { "type": "number" },
+          "propertyType": { "type": "string" },
+          "isEco": { "type": "boolean" },
+          "materialProvided": { "type": "boolean" },
+          "price": { "type": "number" },
+          "recurringTypeId": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": "string" },
+          "address": {
+            "type": "object",
+            "properties": {
+              "street": { "type": "string" },
+              "landmark": { "type": "string" },
+              "addressLine1": { "type": "string" },
+              "addressLine2": { "type": "string" },
+              "city": { "type": "string" },
+              "state": { "type": "string" },
+              "zip": { "type": "string" },
+              "specialInstructions": { "type": "string" }
+            },
+            "required": ["addressLine1", "city", "zip"]
+          }
+        },
+        "required": ["serviceId", "type", "paymentMethod", "areaSize", "no_of_rooms", "no_of_bathrooms", "price", "name", "email", "address"]
+      },
+      "UpdateBookingDto": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "assignedStaffId": { "type": "string" }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "staffId": { "type": "string" },
+          "serviceId": { "type": "string" },
+          "bookingId": { "type": "string" },
+          "startTime": { "type": "string", "format": "date-time" },
+          "endTime": { "type": "string", "format": "date-time" },
+          "actualStartTime": { "type": "string", "format": "date-time" },
+          "actualEndTime": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["scheduled", "in_progress", "completed", "missed", "canceled", "rescheduled"] },
+          "isSkipped": { "type": "boolean" }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "bookingId": { "type": "string" },
+          "amount": { "type": "number" },
+          "currency": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "successful", "failed", "refunded"] },
+          "paymentMethod": { "type": "string" },
+          "transactionType": { "type": "string" }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "serviceId": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "paused", "canceled", "pending"] },
+          "recurringType": { "type": "string", "enum": ["daily", "weekly", "bi_weekly", "monthly"] },
+          "recurringFrequency": { "type": "number" },
+          "startDate": { "type": "string", "format": "date-time" },
+          "nextBillingDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "isRead": { "type": "boolean" },
+          "notificationType": { "type": "string", "enum": ["new_assignment", "booking_reminder", "status_change", "payment_confirmation"] },
+          "relatedBookingId": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}
