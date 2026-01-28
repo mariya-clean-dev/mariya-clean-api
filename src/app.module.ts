@@ -17,6 +17,7 @@ import { ResponseModule } from './response/response.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MailerModule } from './mailer/mailer.module';
 import { ZonesModule } from './zones/zones.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ZonesModule } from './zones/zones.module';
     ScheduleModule.forRoot(),
     MailerModule,
     ZonesModule,
+    ChatModule,
   ],
 })
 export class AppModule {}
