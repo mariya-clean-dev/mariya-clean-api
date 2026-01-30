@@ -425,6 +425,7 @@ export class StripeWebhookController {
       include: {
         service: true,
         customer: true,
+        recurringType: true,
         bookingAddress: {
           include: { address: true },
         },
@@ -435,11 +436,38 @@ export class StripeWebhookController {
       throw new Error('Booking not found after payment.');
     }
 
+    // ✅ Update booking status from pending to booked
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'booked' },
+    });
+
+    console.log(`📝 Booking ${bookingId} status updated to 'booked'`);
+
     // ✅ Determine scheduling duration
-    const durationInDays = booking.type === 'recurring' ? 30 : 0;
+    const durationInDays = booking.type === 'recurring' ? 60 : 0;
 
     if (booking.type === 'one_time' && (!date || !time)) {
       throw new Error('Date and time are required for one-time booking.');
+    }
+
+    // ✅ For recurring bookings, create MonthSchedule first
+    if (booking.type === 'recurring' && time && date) {
+      const bookingDate = new Date(date);
+      const dayOfWeek = bookingDate.getDay();
+      
+      await this.shedulerService.createMonthSchedules([
+        { 
+          bookingId: booking.id, 
+          dayOfWeek, 
+          time,
+          weekOfMonth: this.getWeekOfMonth(bookingDate),
+        },
+      ]);
+      
+      console.log(
+        `📅 MonthSchedule created for recurring booking ${booking.id}`,
+      );
     }
 
     // ✅ Generate schedule(s)
@@ -468,6 +496,20 @@ export class StripeWebhookController {
     console.log(
       `✅ Schedule created for booking ${booking.id} (${booking.type})`,
     );
+  }
+
+  // Helper to calculate week of month (1-5)
+  private getWeekOfMonth(date: Date): number {
+    const day = date.getDay();
+    const d = new Date(date.getFullYear(), date.getMonth(), 1);
+    let count = 0;
+
+    while (d <= date) {
+      if (d.getDay() === day) count++;
+      d.setDate(d.getDate() + 1);
+    }
+
+    return count;
   }
 
   private async handleCheckoutSessionExpired(session: any) {

@@ -226,9 +226,23 @@ export class SchedulerService {
       ? await this.prisma.recurringType.findUnique({ where: { id: planId } })
       : null;
 
-    simulatedDates = plan
-      ? simulateFutureDates(baseDate, plan.dayFrequency)
-      : [baseDate];
+    // For recurring bookings, calculate ALL dates within 60 days
+    if (plan) {
+      const startDateTime = DateTime.fromJSDate(baseDate, { zone: 'UTC' }).startOf('day');
+      const endDateTime = startDateTime.plus({ days: 60 });
+      
+      simulatedDates = [];
+      let current = startDateTime;
+      
+      while (current <= endDateTime) {
+        simulatedDates.push(current.toJSDate());
+        current = current.plus({ days: plan.dayFrequency });
+      }
+
+      console.log(`📅 Checking ${simulatedDates.length} recurring dates for availability`);
+    } else {
+      simulatedDates = [baseDate];
+    }
 
     const from = new Date(simulatedDates[0]);
     from.setHours(0, 0, 0, 0);
@@ -257,12 +271,24 @@ export class SchedulerService {
 
     const staffList = await this.prisma.user.findMany({
       where: staffWhere,
-    }); // ✅ Fetch staff in zone
+      orderBy: { priority: 'asc' },
+    });
+
+    if (staffList.length === 0) {
+      console.warn(`⚠️ No staff available in the zone`);
+      // Return all slots as unavailable
+      const slots = generateTimeSlots();
+      slots.forEach(slot => slot.isAvailable = false);
+      return slots;
+    }
+
     const slots = generateTimeSlots();
+    const bufferMins = 30;
 
     for (const slot of slots) {
       const [hour, minute] = slot.time.split(':').map(Number);
 
+      // For this time slot, check if at least one staff is available on ALL recurring dates
       let isSlotAvailable = false;
 
       for (const staff of staffList) {
@@ -270,16 +296,18 @@ export class SchedulerService {
           (s) => s.staffId === staff.id,
         );
 
+        // Check if this staff has conflicts on ANY of the recurring dates
         const hasAnyConflict = simulatedDates.some((date) => {
           const start = new Date(date);
           start.setHours(hour, minute, 0, 0);
-          const end = new Date(start.getTime() + durationMins * 60000);
+          const end = new Date(start.getTime() + (durationMins + bufferMins) * 60000);
           return hasConflict(staffSchedules, start, end);
         });
 
+        // If this staff has no conflicts on any date, the slot is available
         if (!hasAnyConflict) {
           isSlotAvailable = true;
-          break; // ✅ No need to check more staff
+          break;
         }
       }
 
@@ -290,8 +318,18 @@ export class SchedulerService {
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
+    // Enhance schedules with weekOfMonth calculation
+    const enhancedSchedules = schedules.map(schedule => {
+      // If weekOfMonth is not provided, calculate it from the booking date
+      if (schedule.weekOfMonth === undefined || schedule.weekOfMonth === null) {
+        // We'll need the booking to get the date
+        return schedule;
+      }
+      return schedule;
+    });
+
     const created = await this.prisma.monthSchedule.createMany({
-      data: schedules,
+      data: enhancedSchedules,
     });
 
     return {
@@ -1172,6 +1210,102 @@ export class SchedulerService {
     );
 
     return !!availableStaff;
+  }
+
+  /**
+   * Check if staff is available for ALL recurring dates within 60 days
+   * Used before creating a recurring booking to ensure it can be fulfilled
+   */
+  async checkStaffAvailabilityForRecurringBooking({
+    startDate,
+    time,
+    dayFrequency,
+    durationMins,
+    zoneId,
+  }: {
+    startDate: Date;
+    time: string; // HH:mm format
+    dayFrequency: number; // days between occurrences
+    durationMins: number;
+    zoneId: string;
+  }): Promise<{
+    isAvailable: boolean;
+    unavailableDates: Date[];
+    checkedDates: Date[];
+  }> {
+    const [hour, minute] = time.split(':').map(Number);
+    const bufferMins = 30;
+    const totalDuration = durationMins + bufferMins;
+    const daysToCheck = 60;
+
+    // Calculate all recurring dates within 60 days
+    const startDateTime = DateTime.fromJSDate(startDate, { zone: 'UTC' }).startOf('day');
+    const endDateTime = startDateTime.plus({ days: daysToCheck });
+    
+    const recurringDates: Date[] = [];
+    let current = startDateTime;
+    
+    while (current <= endDateTime) {
+      recurringDates.push(current.toJSDate());
+      current = current.plus({ days: dayFrequency });
+    }
+
+    console.log(`🔍 Checking availability for ${recurringDates.length} recurring dates`);
+
+    // Get all staff in the zone
+    const staffInZone = await this.prisma.user.findMany({
+      where: {
+        role: { name: 'staff' },
+        status: 'active',
+        staffZone: { zoneId },
+      },
+      orderBy: { priority: 'asc' },
+      select: { id: true, name: true },
+    });
+
+    if (staffInZone.length === 0) {
+      console.warn(`❌ No staff found in zone ${zoneId}`);
+      return {
+        isAvailable: false,
+        unavailableDates: recurringDates,
+        checkedDates: recurringDates,
+      };
+    }
+
+    console.log(`👥 Found ${staffInZone.length} staff in zone`);
+
+    const unavailableDates: Date[] = [];
+
+    // Check each recurring date
+    for (const date of recurringDates) {
+      const startTime = new Date(date);
+      startTime.setHours(hour, minute, 0, 0);
+      const endTime = new Date(startTime.getTime() + totalDuration * 60000);
+
+      // Check if at least one staff member is available
+      const availableStaff = await this.findAvailableStaffSlot(
+        date,
+        date.getDay(),
+        startTime,
+        endTime,
+        zoneId,
+      );
+
+      if (!availableStaff) {
+        unavailableDates.push(date);
+        console.log(`❌ No staff available on ${date.toISOString().split('T')[0]}`);
+      } else {
+        console.log(`✅ Staff ${availableStaff.name} available on ${date.toISOString().split('T')[0]}`);
+      }
+    }
+
+    const isAvailable = unavailableDates.length === 0;
+
+    return {
+      isAvailable,
+      unavailableDates,
+      checkedDates: recurringDates,
+    };
   }
 
   async findAvailableStaffSlot(

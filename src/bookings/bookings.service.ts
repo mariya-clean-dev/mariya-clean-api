@@ -21,8 +21,9 @@ export class BookingsService {
     private readonly zonesService: ZonesService,
   ) {}
 
-  async create(createBookingDto: CreateBookingDto, userId: string) {
+  async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
     let updatedPrice = createBookingDto.price;
+    const bookingStatus = status || BookingStatus.booked;
 
     // if (createBookingDto.materialProvided == true) {
     //   updatedPrice = updatedPrice * 0.95; // 5% discount
@@ -110,7 +111,7 @@ export class BookingsService {
         paymentMethod: createBookingDto.paymentMethod,
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
-        status: BookingStatus.booked,
+        status: bookingStatus,
         date: createBookingDto.date ? new Date(createBookingDto.date) : null,
         price: updatedPrice,
         zoneId: zone.id,
@@ -132,7 +133,7 @@ export class BookingsService {
         },
         bookingLogs: {
           create: {
-            status: BookingStatus.booked,
+            status: bookingStatus,
             changedAt: new Date(),
             changedBy: userId,
           },

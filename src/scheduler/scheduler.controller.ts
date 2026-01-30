@@ -150,11 +150,13 @@ export class SchedulerController {
     @Query('date') date: string,
     @Query('planId') planId: string,
     @Query('durationMins') durationMins: number,
+    @Query('pincode') pincode?: string,
   ) {
     const slots = await this.schedulerService.getAvailableTimeSlots(
       date,
       planId,
       durationMins,
+      pincode,
     );
     return this.resposneService.successResponse('Time slots list', slots);
   }
