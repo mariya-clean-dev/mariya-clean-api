@@ -421,8 +421,35 @@ export class UsersService {
   async checkPincodeAndSaveLead(checkPincodeDto: CheckPincodeDto) {
     const { name, email, pincode } = checkPincodeDto;
 
-    // // Normalize pincode (remove extended zip if present)
-    // const normalizedPincode = pincode.split('-')[0];
+    // Hardcoded list of accessible pincodes
+    const accessiblePincodes = [
+      '94507',
+      '94509',
+      '94517',
+      '94518',
+      '94519',
+      '94520',
+      '94521',
+      '94522',
+      '94523',
+      '94524',
+      '94526',
+      '94527',
+      '94528',
+      '94529',
+      '94531',
+      '94547',
+      '94549',
+      '94553',
+      '94556',
+      '94561',
+      '94563',
+      '94565',
+      '94595',
+      '94596',
+      '94597',
+      '94598',
+    ];
 
     // console.log(`Checking pincode: Input='${pincode}', Normalized='${normalizedPincode}'`);
 
