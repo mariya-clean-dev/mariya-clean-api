@@ -366,18 +366,32 @@ export class UsersService {
 
     // Hardcoded list of accessible pincodes
     const accessiblePincodes = [
-      '10001', // New York, NY
-      '10002',
-      '10003',
-      '90001', // Los Angeles, CA
-      '90002',
-      '90003',
-      '60601', // Chicago, IL
-      '60602',
-      '77001', // Houston, TX
-      '77002',
-      '33101', // Miami, FL
-      '33102',
+      '94507',
+      '94509',
+      '94517',
+      '94518',
+      '94519',
+      '94520',
+      '94521',
+      '94522',
+      '94523',
+      '94524',
+      '94526',
+      '94527',
+      '94528',
+      '94529',
+      '94531',
+      '94547',
+      '94549',
+      '94553',
+      '94556',
+      '94561',
+      '94563',
+      '94565',
+      '94595',
+      '94596',
+      '94597',
+      '94598',
     ];
 
     // Normalize pincode (remove extended zip if present)
