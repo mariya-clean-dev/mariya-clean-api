@@ -17,7 +17,7 @@ async function bootstrap() {
 
       // 👇 ADD THESE
       'https://hoppscotch.io',
-      'https://hoppscotch.yourdomain.com', // if self-hosted
+      'https://hoppscotch.palqar.cloud/',
     ],
     credentials: true,
 
