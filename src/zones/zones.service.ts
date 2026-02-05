@@ -31,8 +31,6 @@ export class ZonesService {
         name: createZoneDto.name,
         code: createZoneDto.code,
         isActive: createZoneDto.isActive ?? true,
-        slotMultiplier: createZoneDto.slotMultiplier ?? 1.0,
-        maxBookingsPerSlot: createZoneDto.maxBookingsPerSlot ?? 1,
       },
     });
   }

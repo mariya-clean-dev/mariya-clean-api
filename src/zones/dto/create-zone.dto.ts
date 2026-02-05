@@ -3,9 +3,6 @@ import {
   IsNotEmpty,
   IsBoolean,
   IsOptional,
-  IsNumber,
-  IsInt,
-  Min,
 } from 'class-validator';
 
 export class CreateZoneDto {
@@ -20,14 +17,4 @@ export class CreateZoneDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  slotMultiplier?: number;
-
-  @IsInt()
-  @IsOptional()
-  @Min(1)
-  maxBookingsPerSlot?: number;
 }

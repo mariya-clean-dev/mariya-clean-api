@@ -531,10 +531,6 @@ model Zone {
   // Soft delete
   deletedAt DateTime? @map("deleted_at")
 
-  // Zone rules
-  slotMultiplier     Decimal @default(1.0) @db.Decimal(3, 2)
-  maxBookingsPerSlot Int     @default(1)
-
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

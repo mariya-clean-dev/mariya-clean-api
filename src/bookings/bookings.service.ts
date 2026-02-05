@@ -10,6 +10,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ZonesService } from '../zones/zones.service';
+import { UsersService } from '../users/users.service';
 import dayjs from 'dayjs';
 import { RescheduleDto } from './dto/reschedule.dto';
 
@@ -19,6 +20,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly zonesService: ZonesService,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
@@ -178,14 +180,31 @@ export class BookingsService {
       }
     }
 
-    // Notify admin about new booking
-    await this.notificationsService.createNotification({
-      userId: userId, // This would be admin ID in production
-      title: 'New Booking',
-      message: `A new booking has been created (ID: ${booking.id})`,
-      notificationType: 'new_assignment',
-      relatedBookingId: booking.id,
-    });
+    // Notify all admins and staff about new booking
+    try {
+      // Get all admin users
+      const adminUsers = await this.usersService.findByRole('admin');
+      
+      // Get all staff users
+      const staffUsers = await this.usersService.findByRole('staff');
+      
+      // Combine admin and staff users
+      const usersToNotify = [...adminUsers, ...staffUsers];
+      
+      // Send notification to each admin and staff user
+      for (const user of usersToNotify) {
+        await this.notificationsService.createNotification({
+          userId: user.id,
+          title: 'New Booking',
+          message: `A new booking has been created (ID: ${booking.id})`,
+          notificationType: 'new_assignment',
+          relatedBookingId: booking.id,
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the booking creation
+      console.error('Failed to send notifications to admins/staff:', error);
+    }
 
     return booking;
   }

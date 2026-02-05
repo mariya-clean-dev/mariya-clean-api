@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationType } from '@prisma/client';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly firebaseService: FirebaseService,
+  ) {}
 
   async createNotification(createNotificationDto: CreateNotificationDto) {
     // Check if user exists
@@ -32,8 +36,8 @@ export class NotificationsService {
       }
     }
 
-    // Create notification
-    return this.prisma.notification.create({
+    // Create notification in database
+    const notification = await this.prisma.notification.create({
       data: {
         userId: createNotificationDto.userId,
         title: createNotificationDto.title,
@@ -42,6 +46,32 @@ export class NotificationsService {
         relatedBookingId: createNotificationDto.relatedBookingId,
       },
     });
+
+    // Send push notification via Firebase if user has FCM token
+    // Note: This assumes the User model has an fcmToken field
+    // If not present in schema, this will gracefully skip the push notification
+    try {
+      if (user['fcmToken']) {
+        await this.firebaseService.sendNotification({
+          token: user['fcmToken'],
+          notification: {
+            title: createNotificationDto.title,
+            body: createNotificationDto.message,
+          },
+          data: {
+            notificationType: createNotificationDto.notificationType,
+            ...(createNotificationDto.relatedBookingId && {
+              bookingId: createNotificationDto.relatedBookingId,
+            }),
+          },
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the notification creation
+      console.error('Failed to send push notification:', error);
+    }
+
+    return notification;
   }
 
   async findAllForUser(userId: string) {

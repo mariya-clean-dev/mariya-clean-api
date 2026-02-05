@@ -207,6 +207,21 @@ export class ServicesService {
     });
   }
 
+  /**
+   * Helper function to round price to nearest multiple of 10
+   * Examples: 142.00 -> 140.00, 137.44 -> 140.00, 145.00 -> 140.00, 146.00 -> 150.00
+   */
+  private roundToNearest10(price: number): number {
+    const remainder = price % 10;
+    if (remainder <= 5) {
+      // Round down: 142 -> 140, 145 -> 140
+      return Math.floor(price / 10) * 10;
+    } else {
+      // Round up: 146 -> 150, 137.44 (remainder 7.44) -> 140
+      return Math.ceil(price / 10) * 10;
+    }
+  }
+
   async getPriceEstimate(
     serviceId: string,
     square_feet: number,
@@ -269,7 +284,7 @@ export class ServicesService {
         title: type.name,
         description: type.description,
         discountPercent,
-        finalPrice,
+        finalPrice: this.roundToNearest10(finalPrice), // Round to nearest 10
         isEcoCleaning,
         materialsProvidedByClient,
       };
@@ -281,7 +296,7 @@ export class ServicesService {
       title: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
-      finalPrice: baseCalculatedPrice,
+      finalPrice: this.roundToNearest10(baseCalculatedPrice), // Round to nearest 10
       isEcoCleaning,
       materialsProvidedByClient,
     };
@@ -290,7 +305,7 @@ export class ServicesService {
     const totalDuration = (square_feet / 500) * service.durationMinutes;
     return {
       totalDuration,
-      baseCalculatedPrice,
+      baseCalculatedPrice: this.roundToNearest10(baseCalculatedPrice), // Round to nearest 10
       estimates,
     };
   }
