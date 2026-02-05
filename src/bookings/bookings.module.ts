@@ -10,6 +10,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
 import { SubscriptionsModule } from 'src/subscriptions/subscriptions.module';
 import { SchedulerModule } from 'src/scheduler/scheduler.module';
 import { MailerModule } from 'src/mailer/mailer.module';
+import { ZonesModule } from 'src/zones/zones.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MailerModule } from 'src/mailer/mailer.module';
     NotificationsModule,
     MailerModule,
     ResponseModule,
+    ZonesModule,
     forwardRef(() => UsersModule),
     forwardRef(() => StripeModule),
     PaymentsModule, 

@@ -14,9 +14,24 @@ async function bootstrap() {
       'https://cleanmaria.com',
       'https://maria-staging.netlify.app',
       'http://localhost:3000',
+
+      // 👇 ADD THESE
+      'https://hoppscotch.io',
+      'https://hoppscotch.palqar.cloud/',
     ],
-    credentials: true, // ✅ if you're using cookies/auth
+    credentials: true,
+
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+    ],
+
+    exposedHeaders: ['Authorization'],
   });
   // Stripe webhook needs raw body
   app.use(

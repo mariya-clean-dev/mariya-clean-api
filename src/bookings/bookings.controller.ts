@@ -77,19 +77,62 @@ export class BookingsController {
     const durationMins =
       (createBookingDto.areaSize / 500) * service.durationMinutes;
 
+    // ✅ Get zone from pincode
+    const zone = await this.prisma.pincode.findFirst({
+      where: {
+        code: createBookingDto.address.zip,
+        isActive: true,
+        deletedAt: null,
+      },
+      include: {
+        zone: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+        },
+      },
+    });
+
+    if (!zone || !zone.zone) {
+      throw new BadRequestException(
+        `Pincode ${createBookingDto.address.zip} is not currently serviced.`,
+      );
+    }
+
+    // ✅ For recurring bookings, validate staff availability for ALL dates within 60 days
     if (type === ServiceType.recurring) {
-      const dayOfWeek = getDay(new Date(date));
-      const isAvailable =
-        await this.schedulerService.isStaffAvailableOnDayAndTime(
-          dayOfWeek,
+      const recurringType = await this.prisma.recurringType.findUnique({
+        where: { id: createBookingDto.recurringTypeId },
+      });
+
+      if (!recurringType) {
+        throw new BadRequestException('Invalid recurring type ID');
+      }
+
+      const availabilityCheck =
+        await this.schedulerService.checkStaffAvailabilityForRecurringBooking({
+          startDate: new Date(date),
           time,
+          dayFrequency: recurringType.dayFrequency,
           durationMins,
-        );
-      if (!isAvailable) {
+          zoneId: zone.zone.id,
+        });
+
+      if (!availabilityCheck.isAvailable) {
+        const unavailableDatesStr = availabilityCheck.unavailableDates
+          .slice(0, 3)
+          .map(d => d.toISOString().split('T')[0])
+          .join(', ');
+        
         throw new ConflictException(
-          'No staff is available for the requested time.',
+          `No staff available for all recurring dates. Unavailable dates include: ${unavailableDatesStr}${availabilityCheck.unavailableDates.length > 3 ? ' and more' : ''}`,
         );
       }
+
+      console.log(
+        `✅ Staff availability confirmed for ${availabilityCheck.checkedDates.length} recurring dates`,
+      );
     }
 
     const userData = {
@@ -101,14 +144,24 @@ export class BookingsController {
     const user = await this.usersService.findOrCreateUser(userData);
     console.log('👤 User resolved/created:', user.id);
 
+    // 💳 PAYMENT METHOD SPLIT
+    const isOnlinePayment = createBookingDto.paymentMethod === PaymentMethodEnum.online;
+
+    // For online payment: create booking with 'pending' status
+    // For offline payment: create booking with 'booked' status
+    const bookingStatus = isOnlinePayment ? BookingStatus.pending : BookingStatus.booked;
+    
     const booking = await this.bookingsService.create(
       createBookingDto,
       user.id,
+      bookingStatus,
     );
-    console.log('📌 Booking created:', booking.id);
+    console.log(`📌 Booking created with status '${bookingStatus}':`, booking.id);
 
     let stripeData = null;
-    if (createBookingDto.paymentMethod === PaymentMethodEnum.online) {
+
+    if (isOnlinePayment) {
+      // 🔑 Online Payment: Create Stripe setup session, defer schedule generation
       const session = await this.stripeService.createCardSetupSession({
         customerId: user.stripeCustomerId,
         successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
@@ -116,18 +169,22 @@ export class BookingsController {
         metadata: { bookingId: booking.id, userId: user.id, date, time },
       });
       stripeData = { checkoutUrl: session.url };
-      console.log('🧾 Stripe session created:', session.url);
-    }
-
-    if (createBookingDto.paymentMethod === PaymentMethodEnum.offline) {
+      console.log('🧧 Stripe session created:', session.url);
+      console.log('⏸️ Schedule generation deferred until payment confirmation');
+    } else {
+      // 💵 Offline Payment: Generate schedules immediately
       const dayOfWeek = getDay(new Date(date));
 
       if (type === ServiceType.recurring) {
+        // Calculate week of month for recurring bookings
+        const bookingDate = new Date(date);
+        const weekOfMonth = this.getWeekOfMonth(bookingDate);
+        
         console.log(
-          `📆 Creating MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}`,
+          `📆 Creating MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}, Week: ${weekOfMonth}`,
         );
         await this.schedulerService.createMonthSchedules([
-          { bookingId: booking.id, dayOfWeek, time },
+          { bookingId: booking.id, dayOfWeek, time, weekOfMonth },
         ]);
       }
 
@@ -149,12 +206,28 @@ export class BookingsController {
     }
 
     return this.responseService.successResponse(
-      'Booking successfully saved...',
+      isOnlinePayment 
+        ? 'Booking created. Please complete payment to confirm.'
+        : 'Booking successfully confirmed.',
       {
         booking,
         stripe: stripeData,
       },
     );
+  }
+
+  // Helper to calculate week of month (1-5)
+  private getWeekOfMonth(date: Date): number {
+    const day = date.getDay();
+    const d = new Date(date.getFullYear(), date.getMonth(), 1);
+    let count = 0;
+
+    while (d <= date) {
+      if (d.getDay() === day) count++;
+      d.setDate(d.getDate() + 1);
+    }
+
+    return count;
   }
 
   // async create(@Body() createBookingDto: CreateBookingDto) {

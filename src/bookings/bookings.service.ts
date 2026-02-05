@@ -9,6 +9,8 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ZonesService } from '../zones/zones.service';
+import { UsersService } from '../users/users.service';
 import dayjs from 'dayjs';
 import { RescheduleDto } from './dto/reschedule.dto';
 
@@ -17,10 +19,13 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly zonesService: ZonesService,
+    private readonly usersService: UsersService,
   ) {}
 
-  async create(createBookingDto: CreateBookingDto, userId: string) {
+  async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
     let updatedPrice = createBookingDto.price;
+    const bookingStatus = status || BookingStatus.booked;
 
     // if (createBookingDto.materialProvided == true) {
     //   updatedPrice = updatedPrice * 0.95; // 5% discount
@@ -71,6 +76,17 @@ export class BookingsService {
       }
     }
 
+    // Validate pincode and get zone
+    const zone = await this.zonesService.validatePincode(
+      createBookingDto.address.zip,
+    );
+
+    if (!zone) {
+      throw new BadRequestException(
+        `Pincode ${createBookingDto.address.zip} is not currently serviced. Please check available service areas.`,
+      );
+    }
+
     const formattedAddress = {
       line_1: createBookingDto.address.addressLine1,
       line_2: createBookingDto.address.addressLine2,
@@ -84,7 +100,7 @@ export class BookingsService {
       ...createBookingDto.address,
       ...formattedAddress,
     };
-    // Create booking
+    // Create booking with zone assignment
     const booking = await this.prisma.booking.create({
       data: {
         userId,
@@ -97,9 +113,10 @@ export class BookingsService {
         paymentMethod: createBookingDto.paymentMethod,
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
-        status: BookingStatus.booked,
+        status: bookingStatus,
         date: createBookingDto.date ? new Date(createBookingDto.date) : null,
         price: updatedPrice,
+        zoneId: zone.id,
         subscriptionId: createBookingDto.subscriptionId
           ? createBookingDto.subscriptionId
           : null,
@@ -118,7 +135,7 @@ export class BookingsService {
         },
         bookingLogs: {
           create: {
-            status: BookingStatus.booked,
+            status: bookingStatus,
             changedAt: new Date(),
             changedBy: userId,
           },
@@ -163,14 +180,31 @@ export class BookingsService {
       }
     }
 
-    // Notify admin about new booking
-    await this.notificationsService.createNotification({
-      userId: userId, // This would be admin ID in production
-      title: 'New Booking',
-      message: `A new booking has been created (ID: ${booking.id})`,
-      notificationType: 'new_assignment',
-      relatedBookingId: booking.id,
-    });
+    // Notify all admins and staff about new booking
+    try {
+      // Get all admin users
+      const adminUsers = await this.usersService.findByRole('admin');
+      
+      // Get all staff users
+      const staffUsers = await this.usersService.findByRole('staff');
+      
+      // Combine admin and staff users
+      const usersToNotify = [...adminUsers, ...staffUsers];
+      
+      // Send notification to each admin and staff user
+      for (const user of usersToNotify) {
+        await this.notificationsService.createNotification({
+          userId: user.id,
+          title: 'New Booking',
+          message: `A new booking has been created (ID: ${booking.id})`,
+          notificationType: 'new_assignment',
+          relatedBookingId: booking.id,
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the booking creation
+      console.error('Failed to send notifications to admins/staff:', error);
+    }
 
     return booking;
   }
@@ -498,6 +532,7 @@ export class BookingsService {
       where: { id: bookingId },
       include: {
         schedules: true,
+        zone: true,
       },
     });
 
@@ -519,6 +554,17 @@ export class BookingsService {
       throw new NotFoundException(
         `Staff with ID ${staffId} not found or user is not staff`,
       );
+    }
+
+    // Validate staff belongs to booking's zone
+    if (booking.zoneId) {
+      const staffZone = await this.zonesService.getStaffZone(staffId);
+
+      if (!staffZone || staffZone.id !== booking.zoneId) {
+        throw new BadRequestException(
+          `Staff ${staff.name} is not assigned to the zone for this booking. Booking zone: ${booking.zone?.name || 'Unknown'}, Staff zone: ${staffZone?.name || 'Not assigned'}`,
+        );
+      }
     }
 
     // Update schedule if it exists

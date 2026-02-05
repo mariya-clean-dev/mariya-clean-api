@@ -108,20 +108,22 @@ model Region {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  name              String
-  email             String              @unique
-  phone             String?
-  status            UserStatus          @default(active)
-  password          String?
-  otp               String?
-  stripePaymentId   String?             @map("stripe_payment_id")
-  priority          Int?
-  otpExpiry         DateTime?           @map("otp_expiry")
-  roleId            String              @map("role_id")
-  stripeCustomerId  String?             @map("stripe_customer_id") // Added for Stripe
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
+  id               String     @id @default(uuid())
+  name             String
+  email            String     @unique
+  phone            String?
+  status           UserStatus @default(active)
+  password         String?
+  otp              String?
+  stripePaymentId  String?    @map("stripe_payment_id")
+  priority         Int?
+  otpExpiry        DateTime?  @map("otp_expiry")
+  roleId           String     @map("role_id")
+  stripeCustomerId String?    @map("stripe_customer_id")
+  fcmToken         String?    @map("fcm_token")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
   role              Role                @relation(fields: [roleId], references: [id])
   addresses         Address[]
   userRegions       UserRegion[]
@@ -135,6 +137,12 @@ model User {
   staffAvailability StaffAvailability[]
   staffPerformance  StaffPerformance[]
   notifications     Notification[]
+
+  //  Chat relations 
+  chatSessionsAsUserA ChatSession[] @relation("UserAChats")
+  chatSessionsAsUserB ChatSession[] @relation("UserBChats")
+  chatMessages        ChatMessage[]
+  staffZone           StaffZone?
 
   @@map("users")
 }
@@ -233,6 +241,8 @@ model Booking {
   subscriptionType   SubscriptionType? @relation(fields: [subscriptionTypeId], references: [id])
   recurringType      RecurringType?    @relation(fields: [recurringTypeId], references: [id])
   bookingAddress     BookingAddress?
+  zoneId             String?           @map("zone_id")
+  zone               Zone?             @relation(fields: [zoneId], references: [id])
   bookingLogs        BookingLog[]
   transactions       Transaction[]
   schedules          Schedule[]
@@ -332,6 +342,8 @@ model StaffAvailability {
   isAvailable Boolean   @default(true) @map("is_available")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  zoneId      String?   @map("zone_id")
+  zone        Zone?     @relation(fields: [zoneId], references: [id])
   staff       User      @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date, startTime, endTime], name: "staffId_date_startTime_endTime")
@@ -452,3 +464,114 @@ model Lead {
 
   @@map("leads")
 }
+
+model ChatSession {
+  id String @id @default(uuid())
+
+  // Participants
+  userAId String @map("user_a_id")
+  userBId String @map("user_b_id")
+
+  // Metadata
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  // Relations
+  messages ChatMessage[]
+
+  userA User @relation("UserAChats", fields: [userAId], references: [id])
+  userB User @relation("UserBChats", fields: [userBId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // One chat per user pair
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+  @@index([lastMessageAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id String @id @default(uuid())
+
+  content String @db.Text
+
+  senderId String @map("sender_id")
+  sender   User   @relation(fields: [senderId], references: [id])
+
+  sessionId String      @map("session_id")
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Delivery / Read states
+  isRead Boolean   @default(false) @map("is_read")
+  readAt DateTime? @map("read_at")
+
+  isDelivered Boolean   @default(false) @map("is_delivered")
+  deliveredAt DateTime? @map("delivered_at")
+  sentAt      DateTime? @map("sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sessionId, createdAt])
+  @@index([senderId])
+  @@map("chat_messages")
+}
+
+model Zone {
+  id   String @id @default(uuid())
+  name String
+  code String @unique
+
+  // Operational state
+  isActive Boolean @default(true)
+
+  // Soft delete
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  pincodes            Pincode[]
+  staff               StaffZone[]
+  bookings            Booking[]
+  staffAvailabilities StaffAvailability[]
+
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("zones")
+}
+
+model Pincode {
+  id     String  @id @default(uuid())
+  code   String  @unique
+  zoneId String? @map("zone_id")
+
+  isActive Boolean @default(true) // 👈 optional but useful
+
+  zone Zone? @relation(fields: [zoneId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([zoneId])
+  @@index([deletedAt])
+  @@map("pincodes")
+}
+
+model StaffZone {
+  id      String @id @default(uuid())
+  staffId String @unique @map("staff_id") // ONE ZONE PER STAFF
+  zoneId  String @map("zone_id")
+
+  staff User @relation(fields: [staffId], references: [id])
+  zone  Zone @relation(fields: [zoneId], references: [id])
+
+  assignedAt DateTime @default(now())
+
+  @@map("staff_zones")
+}
+
