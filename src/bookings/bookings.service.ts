@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -25,6 +27,7 @@ export class BookingsService {
     private readonly zonesService: ZonesService,
     private readonly usersService: UsersService,
     private readonly couponsService: CouponsService,
+    @Inject(forwardRef(() => SchedulerService))
     private readonly schedulerService: SchedulerService,
   ) {}
 
