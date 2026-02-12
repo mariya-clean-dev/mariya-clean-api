@@ -16,15 +16,11 @@ import { MailerModule } from 'src/mailer/mailer.module';
     UsersModule,
     MailerModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION', '24h'),
-        },
-      }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: {
+        expiresIn: '24h',
+      },
     }),
   ],
   controllers: [AuthController],

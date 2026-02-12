@@ -13,6 +13,9 @@ import { ZonesService } from '../zones/zones.service';
 import { UsersService } from '../users/users.service';
 import dayjs from 'dayjs';
 import { RescheduleDto } from './dto/reschedule.dto';
+import { CouponsService } from '../coupons/coupons.service';
+import { SchedulerService } from '../scheduler/scheduler.service';
+import { NextUpcomingScheduleResponseDto } from './dto/next-upcoming-schedules.dto';
 
 @Injectable()
 export class BookingsService {
@@ -21,6 +24,8 @@ export class BookingsService {
     private readonly notificationsService: NotificationsService,
     private readonly zonesService: ZonesService,
     private readonly usersService: UsersService,
+    private readonly couponsService: CouponsService,
+    private readonly schedulerService: SchedulerService,
   ) {}
 
   async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
@@ -100,6 +105,28 @@ export class BookingsService {
       ...createBookingDto.address,
       ...formattedAddress,
     };
+
+    // Apply coupon discount if provided
+    let discountAmount = 0;
+    let couponId: string | null = null;
+    
+    if (createBookingDto.couponCode) {
+      try {
+        const couponValidation = await this.couponsService.validateCoupon(
+          createBookingDto.couponCode,
+          userId,
+          updatedPrice,
+        );
+        
+        discountAmount = couponValidation.discountAmount;
+        updatedPrice = couponValidation.finalAmount;
+        couponId = couponValidation.coupon.id;
+      } catch (error) {
+        // Re-throw coupon validation errors to the user
+        throw error;
+      }
+    }
+
     // Create booking with zone assignment
     const booking = await this.prisma.booking.create({
       data: {
@@ -121,6 +148,8 @@ export class BookingsService {
           ? createBookingDto.subscriptionId
           : null,
         recurringTypeId: recurringType ? recurringType.id : null,
+        couponId: couponId,
+        discountAmount: discountAmount,
         // subscriptionTypeId: subscriptionType ? subscriptionType.id : null,
         bookingAddress: {
           create: {
@@ -177,6 +206,21 @@ export class BookingsService {
             quantity: 1, // Default quantity
           },
         });
+      }
+    }
+
+    // Record coupon usage if a coupon was applied
+    if (couponId && discountAmount > 0) {
+      try {
+        await this.couponsService.recordUsage(
+          couponId,
+          userId,
+          booking.id,
+          discountAmount,
+        );
+      } catch (error) {
+        // Log error but don't fail the booking if usage tracking fails
+        console.error('Failed to record coupon usage:', error);
       }
     }
 
@@ -844,5 +888,99 @@ export class BookingsService {
       totalBookings: schedules.length, // This is actually total scheduled work count
       heatmapData: heatmapArray,
     };
+  }
+
+  async getNextUpcomingSchedules(
+    userId: string,
+  ): Promise<NextUpcomingScheduleResponseDto[]> {
+    // Find all active bookings for the user
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        userId,
+        status: {
+          in: [BookingStatus.booked, BookingStatus.in_progress, BookingStatus.pending],
+        },
+      },
+      include: {
+        service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        bookingAddress: {
+          include: {
+            address: {
+              select: {
+                line_1: true,
+                line_2: true,
+                city: true,
+                state: true,
+                zip: true,
+              },
+            },
+          },
+        },
+        assignedStaff: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Map each booking to include its next upcoming schedule
+    const results: NextUpcomingScheduleResponseDto[] = [];
+
+    for (const booking of bookings) {
+      // Get the next upcoming schedule for this booking
+      const nextSchedule = await this.schedulerService.getNextScheduleForBooking(
+        booking.id,
+      );
+
+      // Only include bookings that have an upcoming schedule
+      if (nextSchedule) {
+        results.push({
+          bookingId: booking.id,
+          serviceName: booking.service.name,
+          serviceId: booking.service.id,
+          bookingStatus: booking.status,
+          bookingType: booking.type,
+          price: Number(booking.price),
+          address: booking.bookingAddress?.address
+            ? {
+                line_1: booking.bookingAddress.address.line_1,
+                line_2: booking.bookingAddress.address.line_2 || undefined,
+                city: booking.bookingAddress.address.city,
+                state: booking.bookingAddress.address.state || undefined,
+                zip: booking.bookingAddress.address.zip,
+              }
+            : undefined,
+          assignedStaff: booking.assignedStaff
+            ? {
+                id: booking.assignedStaff.id,
+                name: booking.assignedStaff.name,
+                email: booking.assignedStaff.email,
+                phone: booking.assignedStaff.phone || undefined,
+              }
+            : undefined,
+          nextSchedule: {
+            scheduleId: nextSchedule.id,
+            startTime: nextSchedule.startTime,
+            endTime: nextSchedule.endTime,
+            status: nextSchedule.status,
+            staffId: nextSchedule.staffId || undefined,
+          },
+        });
+      }
+    }
+
+    return results;
   }
 }

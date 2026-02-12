@@ -720,7 +720,7 @@ export class SchedulerService {
     };
   }
 
-  private async getNextScheduleForBooking(bookingId: string) {
+  public async getNextScheduleForBooking(bookingId: string) {
     return this.prisma.schedule.findFirst({
       where: {
         bookingId,

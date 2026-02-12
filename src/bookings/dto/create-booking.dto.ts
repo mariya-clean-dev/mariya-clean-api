@@ -147,6 +147,10 @@ export class CreateBookingDto {
   @IsOptional()
   phone?: string;
 
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
+
   // @ValidateNested()
   // @Type(() => BookingScheduleDto)
   // @IsOptional()

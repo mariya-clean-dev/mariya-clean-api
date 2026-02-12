@@ -424,6 +424,17 @@ export class BookingsController {
     return this.responseService.successResponse('Bookings list', bookings);
   }
 
+  @Get('next-upcoming-schedules')
+  async getNextUpcomingSchedules(@Request() req) {
+    const schedules = await this.bookingsService.getNextUpcomingSchedules(
+      req.user.id,
+    );
+    return this.responseService.successResponse(
+      'Next upcoming schedules',
+      schedules,
+    );
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req) {
     const booking = await this.bookingsService.findOne(

@@ -87,6 +87,11 @@ enum NotificationType {
   payment_confirmation
 }
 
+enum DiscountType {
+  percentage
+  flat_amount
+}
+
 model Role {
   id        String   @id @default(uuid())
   name      String   @unique
@@ -143,6 +148,7 @@ model User {
   chatSessionsAsUserB ChatSession[] @relation("UserBChats")
   chatMessages        ChatMessage[]
   staffZone           StaffZone?
+  couponUsages        CouponUsage[]
 
   @@map("users")
 }
@@ -250,6 +256,10 @@ model Booking {
   bookingAddOns      BookingAddOn[]
   notifications      Notification[]
   monthSchedules     MonthSchedule[]
+  couponId           String?       @map("coupon_id")
+  coupon             Coupon?       @relation(fields: [couponId], references: [id])
+  discountAmount     Decimal       @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  couponUsage        CouponUsage?
 
   @@map("bookings")
 }
@@ -573,5 +583,45 @@ model StaffZone {
   assignedAt DateTime @default(now())
 
   @@map("staff_zones")
+}
+
+model Coupon {
+  id               String       @id @default(uuid())
+  code             String       @unique
+  description      String?      @db.Text
+  discountType     DiscountType @map("discount_type")
+  discountValue    Decimal      @map("discount_value") @db.Decimal(10, 2)
+  minimumAmount    Decimal?     @map("minimum_amount") @db.Decimal(10, 2)
+  maxUsageCount    Int?         @map("max_usage_count")
+  maxUsagePerUser  Int?         @map("max_usage_per_user")
+  validFrom        DateTime?    @map("valid_from")
+  validUntil       DateTime?    @map("valid_until")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  couponUsages CouponUsage[]
+  bookings     Booking[]
+
+  @@index([code])
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id             String   @id @default(uuid())
+  couponId       String   @map("coupon_id")
+  userId         String   @map("user_id")
+  bookingId      String   @unique @map("booking_id")
+  discountAmount Decimal  @map("discount_amount") @db.Decimal(10, 2)
+  usedAt         DateTime @default(now()) @map("used_at")
+
+  coupon  Coupon  @relation(fields: [couponId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@index([couponId])
+  @@index([userId])
+  @@map("coupon_usages")
 }
 

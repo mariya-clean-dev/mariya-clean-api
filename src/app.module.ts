@@ -18,6 +18,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { MailerModule } from './mailer/mailer.module';
 import { ZonesModule } from './zones/zones.module';
 import { ChatModule } from './chat/chat.module';
+import { CouponsModule } from './coupons/coupons.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ChatModule } from './chat/chat.module';
     MailerModule,
     ZonesModule,
     ChatModule,
+    CouponsModule,
   ],
 })
 export class AppModule {}

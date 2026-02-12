@@ -11,6 +11,7 @@ import { SubscriptionsModule } from 'src/subscriptions/subscriptions.module';
 import { SchedulerModule } from 'src/scheduler/scheduler.module';
 import { MailerModule } from 'src/mailer/mailer.module';
 import { ZonesModule } from 'src/zones/zones.module';
+import { CouponsModule } from 'src/coupons/coupons.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ZonesModule } from 'src/zones/zones.module';
     PaymentsModule, 
     SubscriptionsModule,
     forwardRef(() => SchedulerModule),
+    CouponsModule,
   ],
   controllers: [BookingsController],
   providers: [BookingsService],
