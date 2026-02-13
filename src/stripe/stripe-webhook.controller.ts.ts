@@ -92,7 +92,7 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentSucceeded(paymentIntent: any) {
-    console.log('✅ Stripe event: setup_intent.succeeded');
+    console.log('✅ Stripe event: payment_intent.succeeded');
 
     const stripePaymentId = paymentIntent.id;
 
@@ -120,32 +120,74 @@ export class StripeWebhookController {
       return;
     }
 
-    // Step 2: Fallback – handle first-time payments (booking-based)
+    // Step 2: Handle booking-based payments (mobile PaymentIntent flow)
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
+      const { date, time } = paymentIntent.metadata;
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
           service: true,
           customer: true,
+          recurringType: true,
           bookingAddress: { include: { address: true } },
         },
       });
 
       if (booking) {
-        await this.prisma.transaction.create({
-          data: {
-            bookingId,
-            stripePaymentId,
-            stripeInvoiceId: paymentIntent.invoice || null,
-            amount: paymentIntent.amount / 100,
-            currency: paymentIntent.currency,
-            status: TransactionStatus.successful,
-            paymentMethod: paymentIntent.payment_method_types[0] || 'card',
-            transactionType: 'payment',
-          },
-        });
+        // Create transaction if none was updated (fallback for first-time payments)
+        if (updatedTx.count === 0) {
+          await this.prisma.transaction.create({
+            data: {
+              bookingId,
+              stripePaymentId,
+              stripeInvoiceId: paymentIntent.invoice || null,
+              amount: paymentIntent.amount / 100,
+              currency: paymentIntent.currency,
+              status: TransactionStatus.successful,
+              paymentMethod: paymentIntent.payment_method_types[0] || 'card',
+              transactionType: 'payment',
+            },
+          });
+        }
 
+        // ✅ Update booking status from pending to booked
+        await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: { status: 'booked' },
+        });
+        console.log(`📝 Booking ${bookingId} status updated to 'booked'`);
+
+        // ✅ Determine scheduling duration
+        const durationInDays = booking.type === 'recurring' ? 60 : 0;
+
+        // ✅ For recurring bookings, create MonthSchedule first
+        if (booking.type === 'recurring' && time && date) {
+          const bookingDate = new Date(date);
+          const dayOfWeek = bookingDate.getDay();
+
+          await this.shedulerService.createMonthSchedules([
+            {
+              bookingId: booking.id,
+              dayOfWeek,
+              time,
+              weekOfMonth: this.getWeekOfMonth(bookingDate),
+            },
+          ]);
+
+          console.log(
+            `📅 MonthSchedule created for recurring booking ${booking.id}`,
+          );
+        }
+
+        // ✅ Generate schedule(s)
+        await this.shedulerService.generateSchedulesForBooking(
+          booking.id,
+          durationInDays,
+          time,
+        );
+
+        // 📧 Send confirmation email
         await this.mailService.sendBookingConfirmationEmail(
           booking.customer.email,
           booking.customer.name,
@@ -153,18 +195,17 @@ export class StripeWebhookController {
           booking.bookingAddress.address.line_1,
         );
 
-        // await this.shedulerService.generateSchedulesForBooking(booking.id);
-
+        // 🔔 Send notification
         await this.notificationsService.createNotification({
           userId: booking.userId,
           title: 'Payment Successful',
-          message: `Your payment of ${(paymentIntent.amount / 100).toFixed(2)} ${paymentIntent.currency.toUpperCase()} for ${booking.service.name} was successful.`,
+          message: `Your payment of ${(paymentIntent.amount / 100).toFixed(2)} ${paymentIntent.currency.toUpperCase()} for ${booking.service.name} was successful. Your booking is confirmed.`,
           notificationType: 'payment_confirmation',
           relatedBookingId: bookingId,
         });
 
         console.log(
-          `✅ New transaction created and schedule generated for booking: ${bookingId}`,
+          `✅ Payment confirmed, schedules generated for booking: ${bookingId}`,
         );
       }
     }

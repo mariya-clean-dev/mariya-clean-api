@@ -161,15 +161,46 @@ export class BookingsController {
     let stripeData = null;
 
     if (isOnlinePayment) {
-      // 🔑 Online Payment: Create Stripe setup session, defer schedule generation
-      const session = await this.stripeService.createCardSetupSession({
-        customerId: user.stripeCustomerId,
-        successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
-        cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
-        metadata: { bookingId: booking.id, userId: user.id, date, time },
-      });
-      stripeData = { checkoutUrl: session.url };
-      console.log('🧧 Stripe session created:', session.url);
+      const platform = createBookingDto.platform || 'web';
+
+      if (platform === 'mobile') {
+        // 📱 Mobile Payment: Create PaymentIntent, return clientSecret for Stripe SDK
+        const stripeCustomerId = await this.paymentsService.getStripeCustomerId(user.id);
+        const paymentIntent = await this.stripeService.createPaymentIntent(
+          Number(booking.price),
+          'usd',
+          stripeCustomerId,
+          { bookingId: booking.id, userId: user.id, date: date?.toString(), time },
+        );
+
+        // Save pending transaction so webhook can match it
+        await this.paymentsService.saveTransaction({
+          bookingId: booking.id,
+          stripePaymentId: paymentIntent.id,
+          amount: Number(booking.price),
+          currency: 'usd',
+          status: 'pending' as any,
+          paymentMethod: 'card',
+          transactionType: 'payment',
+        });
+
+        stripeData = {
+          clientSecret: paymentIntent.client_secret,
+          paymentIntentId: paymentIntent.id,
+          stripeCustomerId,
+        };
+        console.log('📱 PaymentIntent created for mobile:', paymentIntent.id);
+      } else {
+        // 🌐 Web Payment: Create Stripe checkout session (existing flow)
+        const session = await this.stripeService.createCardSetupSession({
+          customerId: user.stripeCustomerId,
+          successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
+          cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
+          metadata: { bookingId: booking.id, userId: user.id, date, time },
+        });
+        stripeData = { checkoutUrl: session.url };
+        console.log('🌐 Stripe checkout session created:', session.url);
+      }
       console.log('⏸️ Schedule generation deferred until payment confirmation');
     } else {
       // 💵 Offline Payment: Generate schedules immediately

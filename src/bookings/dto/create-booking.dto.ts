@@ -151,6 +151,10 @@ export class CreateBookingDto {
   @IsOptional()
   couponCode?: string;
 
+  @IsOptional()
+  @IsString()
+  platform?: 'web' | 'mobile';
+
   // @ValidateNested()
   // @Type(() => BookingScheduleDto)
   // @IsOptional()
