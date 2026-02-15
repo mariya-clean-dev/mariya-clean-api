@@ -370,20 +370,21 @@ export class UsersService {
     // console.log(`Checking pincode: Input='${pincode}', Normalized='${normalizedPincode}'`);
 
     // Check if pincode exists in the pincode table and belongs to an active zone
+  
     const pincodeRecord = await this.prisma.pincode.findFirst({
       where: {
         code: pincode,
         isActive: true,
-        deletedAt: null,
         zone: {
           isActive: true,
-          deletedAt: null,
         },
       },
       include: {
         zone: true,
       }
     });
+
+    console.log(pincode, pincodeRecord)
 
     console.log('Pincode lookup result:', JSON.stringify(pincodeRecord, null, 2));
 
