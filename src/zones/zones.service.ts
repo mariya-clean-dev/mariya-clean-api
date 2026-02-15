@@ -221,13 +221,11 @@ export class ZonesService {
       where: {
         code: pincode,
         isActive: true,
-        deletedAt: null,
       },
       include: {
         zone: {
           where: {
             isActive: true,
-            deletedAt: null,
           },
         },
       },
@@ -275,13 +273,11 @@ export class ZonesService {
       where: {
         code: pincode,
         isActive: true,
-        deletedAt: null,
       },
       include: {
         zone: {
           where: {
             isActive: true,
-            deletedAt: null,
           },
         },
       },
