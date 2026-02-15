@@ -394,7 +394,7 @@ export class UsersService {
       data: {
         name,
         email,
-        pincode: normalizedPincode,
+        pincode: pincode,
       },
     });
 
