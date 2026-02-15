@@ -364,27 +364,23 @@ export class UsersService {
   async checkPincodeAndSaveLead(checkPincodeDto: CheckPincodeDto) {
     const { name, email, pincode } = checkPincodeDto;
 
-    // Hardcoded list of accessible pincodes
-    const accessiblePincodes = [
-      '10001', // New York, NY
-      '10002',
-      '10003',
-      '90001', // Los Angeles, CA
-      '90002',
-      '90003',
-      '60601', // Chicago, IL
-      '60602',
-      '77001', // Houston, TX
-      '77002',
-      '33101', // Miami, FL
-      '33102',
-    ];
-
     // Normalize pincode (remove extended zip if present)
     const normalizedPincode = pincode.split('-')[0];
 
-    // Check if pincode is in the accessible list
-    const isAccessible = accessiblePincodes.includes(normalizedPincode);
+    // Check if pincode exists in the pincode table and belongs to an active zone
+    const pincodeRecord = await this.prisma.pincode.findFirst({
+      where: {
+        code: normalizedPincode,
+        isActive: true,
+        deletedAt: null,
+        zone: {
+          isActive: true,
+          deletedAt: null,
+        },
+      },
+    });
+
+    const isAccessible = !!pincodeRecord;
 
     // Save lead to database
     await this.prisma.lead.create({
