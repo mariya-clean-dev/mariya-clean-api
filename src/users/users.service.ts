@@ -129,6 +129,11 @@ export class UsersService {
         priority: true,
         createdAt: true,
         updatedAt: true,
+        staffZone: {
+          include: {
+            zone: true,
+          },
+        },
       },
       orderBy: {
         priority: 'asc', // or 'desc'
