@@ -11,6 +11,8 @@ import {
   Query,
   BadRequestException,
   ConflictException,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -568,6 +570,49 @@ export class BookingsController {
     return this.responseService.successResponse(
       'Booking heatmap calendar data',
       heatmapData,
+    );
+  }
+  @Post(':id/update-payment-method')
+  async createPaymentUpdateSession(@Param('id') id: string, @Request() req) {
+    const booking = await this.bookingsService.findOne(
+      id,
+      req.user.id,
+      req.user.role,
+    );
+
+    if (
+      req.user.role !== 'admin' &&
+      booking.userId !== req.user.id
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to access this booking',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: booking.userId },
+    });
+
+    if (!user ||!user.stripeCustomerId) {
+       throw new BadRequestException('User or Stripe customer not found');
+    }
+
+    const session = await this.stripeService.createCardSetupSession({
+      customerId: user.stripeCustomerId,
+      successUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=true`,
+      cancelUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=false`,
+      metadata: { bookingId: id, userId: user.id },
+    });
+
+    await this.mailService.sendPaymentUpdateEmail(
+      user.email,
+      user.name,
+      session.url,
+    );
+
+    return this.responseService.successResponse(
+      'Payment update email sent successfully',
+      { sessionUrl: session.url },
     );
   }
 }
