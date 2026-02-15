@@ -82,13 +82,11 @@ export class BookingsController {
       where: {
         code: createBookingDto.address.zip,
         isActive: true,
-        deletedAt: null,
       },
       include: {
         zone: {
           where: {
             isActive: true,
-            deletedAt: null,
           },
         },
       },
