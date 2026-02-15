@@ -11,8 +11,5 @@ export class CheckPincodeDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d{5}(-\d{4})?$/, {
-    message: 'Pincode must be a valid US ZIP code (e.g., 12345 or 12345-6789)',
-  })
   pincode: string;
 }

@@ -364,13 +364,15 @@ export class UsersService {
   async checkPincodeAndSaveLead(checkPincodeDto: CheckPincodeDto) {
     const { name, email, pincode } = checkPincodeDto;
 
-    // Normalize pincode (remove extended zip if present)
-    const normalizedPincode = pincode.split('-')[0];
+    // // Normalize pincode (remove extended zip if present)
+    // const normalizedPincode = pincode.split('-')[0];
+    
+    // console.log(`Checking pincode: Input='${pincode}', Normalized='${normalizedPincode}'`);
 
     // Check if pincode exists in the pincode table and belongs to an active zone
     const pincodeRecord = await this.prisma.pincode.findFirst({
       where: {
-        code: normalizedPincode,
+        code: pincode,
         isActive: true,
         deletedAt: null,
         zone: {
@@ -378,7 +380,12 @@ export class UsersService {
           deletedAt: null,
         },
       },
+      include: {
+        zone: true,
+      }
     });
+
+    console.log('Pincode lookup result:', JSON.stringify(pincodeRecord, null, 2));
 
     const isAccessible = !!pincodeRecord;
 
