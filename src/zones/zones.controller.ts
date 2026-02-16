@@ -21,7 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @Controller('zones')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ZonesController {
-  constructor(private readonly zonesService: ZonesService) {}
+  constructor(private readonly zonesService: ZonesService) { }
 
   @Post()
   @Roles('admin')

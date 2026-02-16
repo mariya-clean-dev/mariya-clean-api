@@ -12,7 +12,7 @@ import { CreatePincodeDto } from './dto/create-pincode.dto';
 
 @Injectable()
 export class ZonesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(createZoneDto: CreateZoneDto) {
     // Check if zone code already exists

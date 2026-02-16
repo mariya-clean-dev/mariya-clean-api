@@ -14,6 +14,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,7 +29,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly responseService: ResponseService,
-  ) {}
+  ) { }
 
   @Post()
   @UseGuards(RolesGuard)
@@ -133,5 +134,18 @@ export class UsersController {
     return this.responseService.successResponse(result.message, {
       success: result.success,
     });
+  }
+
+  // FCM Token endpoint
+  @Patch('fcm-token')
+  async updateFcmToken(
+    @Request() req,
+    @Body() updateFcmTokenDto: UpdateFcmTokenDto,
+  ) {
+    const result = await this.usersService.updateFcmToken(
+      req.user.id,
+      updateFcmTokenDto.fcmToken,
+    );
+    return this.responseService.successResponse(result.message, result.user);
   }
 }

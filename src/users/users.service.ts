@@ -16,7 +16,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stripeService: StripeService,
-  ) {}
+  ) { }
 
   async create(createUserDto: CreateUserDto) {
     const { email, password } = createUserDto;
@@ -371,11 +371,11 @@ export class UsersService {
 
     // // Normalize pincode (remove extended zip if present)
     // const normalizedPincode = pincode.split('-')[0];
-    
+
     // console.log(`Checking pincode: Input='${pincode}', Normalized='${normalizedPincode}'`);
 
     // Check if pincode exists in the pincode table and belongs to an active zone
-  
+
     const pincodeRecord = await this.prisma.pincode.findFirst({
       where: {
         code: pincode,
@@ -417,5 +417,33 @@ export class UsersService {
           'We are not currently servicing your area, but we have saved your information and will notify you when we expand to your location.',
       };
     }
+  }
+
+  async updateFcmToken(userId: string, fcmToken: string) {
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Update FCM token
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { fcmToken },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        fcmToken: true,
+      },
+    });
+
+    return {
+      message: 'FCM token updated successfully',
+      user: updatedUser,
+    };
   }
 }

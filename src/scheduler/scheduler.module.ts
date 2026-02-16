@@ -8,6 +8,7 @@ import { BookingsModule } from 'src/bookings/bookings.module';
 import Stripe from 'stripe';
 import { StripeModule } from 'src/stripe/stripe.module';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,9 +17,10 @@ import { PaymentsModule } from 'src/payments/payments.module';
     forwardRef(() => BookingsModule),
     forwardRef(() => StripeModule),
     PaymentsModule,
+    NotificationsModule,
   ],
   controllers: [SchedulerController],
   providers: [SchedulerService],
   exports: [SchedulerService],
 })
-export class SchedulerModule {}
+export class SchedulerModule { }

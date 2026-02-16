@@ -25,6 +25,7 @@ import utc from 'dayjs/plugin/utc';
 import { BookingsService } from 'src/bookings/bookings.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { StripeService } from 'src/stripe/stripe.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { DateTime, Interval } from 'luxon';
 import { scheduled } from 'rxjs';
 
@@ -47,7 +48,8 @@ export class SchedulerService {
     private readonly bookingService: BookingsService,
     private readonly stripeService: StripeService,
     private readonly paymentsService: PaymentsService,
-  ) {}
+    private readonly notificationsService: NotificationsService,
+  ) { }
 
   async findAvailableStaff(startTime: Date, endTime: Date, zoneId?: string) {
     const where: any = {
@@ -232,10 +234,10 @@ export class SchedulerService {
     if (plan) {
       const startDateTime = DateTime.fromJSDate(baseDate, { zone: 'UTC' }).startOf('day');
       const endDateTime = startDateTime.plus({ days: 60 });
-      
+
       simulatedDates = [];
       let current = startDateTime;
-      
+
       while (current <= endDateTime) {
         simulatedDates.push(current.toJSDate());
         current = current.plus({ days: plan.dayFrequency });
@@ -385,12 +387,22 @@ export class SchedulerService {
     return schedule;
   }
 
+  /**
+   * Updates the status of an existing schedule. 
+   * IMPORTANT: This method ONLY updates the schedule status, it does NOT create new schedules.
+   * Only the reschedule API should create new schedules.
+   * 
+   * Handles payment processing for online payments when marking as completed.
+   * Creates transaction records for payment tracking (not schedule records).
+   */
   async updateSheduleStatus(
     id: string,
     status: ScheduleStatus,
     userId: string,
     role: string,
   ) {
+    console.log(`📝 Updating schedule ${id} status to: ${status}`);
+
     const scheduleExist = await this.prisma.schedule.findUnique({
       where: { id },
       include: {
@@ -408,7 +420,10 @@ export class SchedulerService {
     }
 
     const booking = scheduleExist.booking;
-    if (!booking) return scheduleExist;
+    if (!booking) {
+      console.log(`⚠️ No booking found for schedule ${id}, returning existing schedule`);
+      return scheduleExist;
+    }
 
     const isCompleted = status === 'completed';
     const isCanceled = status === 'canceled';
@@ -417,6 +432,7 @@ export class SchedulerService {
 
     let updatedSchedule;
 
+    // Handle completion with online payment - process payment first
     if (isCompleted && isOnlinePayment) {
       const stripeCustomerId = booking.customer.stripeCustomerId;
       const paymentMethodId = booking.customer.stripePaymentId;
@@ -430,6 +446,8 @@ export class SchedulerService {
       }
 
       try {
+        console.log(`💳 Processing online payment for schedule ${id}`);
+
         // Create payment intent (charge the saved card)
         const paymentIntent = await this.stripeService.chargeSavedCard({
           customerId: stripeCustomerId,
@@ -444,13 +462,13 @@ export class SchedulerService {
           },
         });
 
-        // Update the schedule as completed
+        // ✅ UPDATE (not create) the schedule as completed
         updatedSchedule = await this.prisma.schedule.update({
           where: { id },
           data: { status: ScheduleStatus.completed },
         });
 
-        // Record transaction as pending
+        // Record transaction as pending (this is a payment record, not a schedule)
         await this.prisma.transaction.create({
           data: {
             bookingId: booking.id,
@@ -462,8 +480,12 @@ export class SchedulerService {
             transactionType: 'charge',
           },
         });
+
+        console.log(`✅ Schedule ${id} updated to completed with pending payment`);
       } catch (err) {
-        // Log failed transaction
+        console.error(`❌ Payment failed for schedule ${id}:`, err.message);
+
+        // Log failed transaction (this is a payment record, not a schedule)
         await this.prisma.transaction.create({
           data: {
             bookingId: booking.id,
@@ -476,6 +498,7 @@ export class SchedulerService {
           },
         });
 
+        // ✅ UPDATE (not create) schedule to payment_failed
         await this.prisma.schedule.update({
           where: { id },
           data: { status: 'payment_failed' },
@@ -484,15 +507,21 @@ export class SchedulerService {
         throw new BadRequestException('Stripe payment failed: ' + err.message);
       }
     } else {
-      // For cash or cancellation, update status directly
+      // For cash, cancellation, or other status changes - update directly
+      console.log(`✅ Updating schedule ${id} status directly to: ${status}`);
+
+      // ✅ UPDATE (not create) status directly
       updatedSchedule = await this.prisma.schedule.update({
         where: { id },
         data: { status },
       });
     }
 
+    // Handle cash payment completion - record transaction
     if (isCompleted && !isOnlinePayment) {
-      // Manually create successful transaction for cash payment
+      console.log(`💵 Recording cash payment transaction for schedule ${id}`);
+
+      // Create transaction record for cash payment (this is a payment record, not a schedule)
       await this.prisma.transaction.create({
         data: {
           bookingId: booking.id,
@@ -505,8 +534,9 @@ export class SchedulerService {
       });
     }
 
-    // Handle one-time booking completion or cancellation logic
+    // Handle one-time booking completion or cancellation
     if (booking.type === 'one_time' && (isCompleted || isCanceled)) {
+      console.log(`📦 Updating one-time booking ${booking.id} status to ${status}`);
       await this.bookingService.cancelorComplete(
         booking.id,
         userId,
@@ -515,6 +545,14 @@ export class SchedulerService {
       );
     }
 
+    // 🔔 Send notification about status change
+    await this.notificationsService.notifyScheduleStatusChange(
+      id,
+      scheduleExist.status,
+      status,
+    );
+
+    console.log(`✅ Schedule ${id} status update completed successfully`);
     return updatedSchedule;
   }
 
@@ -639,6 +677,12 @@ export class SchedulerService {
     });
   }
 
+  /**
+   * Reschedules a booking to a new date/time.
+   * IMPORTANT: This is the ONLY method that should create new schedules after initial booking.
+   * - Marks the old schedule as 'rescheduled'
+   * - Creates a NEW schedule with the new date/time
+   */
   async rescheduleBookingSchedule(bookingId: string, dto: RescheduleDto) {
     const { newDate, time } = dto;
 
@@ -709,6 +753,9 @@ export class SchedulerService {
       data: { status: ScheduleStatus.rescheduled },
     });
 
+    console.log(`🔄 Creating new rescheduled schedule for booking ${bookingId}`);
+
+    // ✅ CREATE new schedule (this is the ONLY place where schedules are created after initial booking)
     const newSchedule = await this.prisma.schedule.create({
       data: {
         staffId: existingSchedule.staffId,
@@ -719,6 +766,15 @@ export class SchedulerService {
         status: ScheduleStatus.scheduled,
       },
     });
+
+    console.log(`✅ Reschedule completed: old schedule ${existingSchedule.id} → new schedule ${newSchedule.id}`);
+
+    // 🔔 Send notifications about reschedule
+    await this.notificationsService.notifyReschedule(
+      existingSchedule.id,
+      newSchedule.id,
+      bookingId,
+    );
 
     return {
       message: 'Booking successfully rescheduled',
@@ -1015,8 +1071,7 @@ export class SchedulerService {
       });
 
       console.log(
-        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'}: ${start.toISOString()} with ${
-          staff?.name ?? 'no staff'
+        `${isSkipped ? '⚪ Skipped' : '📅 Scheduled'}: ${start.toISOString()} with ${staff?.name ?? 'no staff'
         }`,
       );
     }
@@ -1250,10 +1305,10 @@ export class SchedulerService {
     // Calculate all recurring dates within 60 days
     const startDateTime = DateTime.fromJSDate(startDate, { zone: 'UTC' }).startOf('day');
     const endDateTime = startDateTime.plus({ days: daysToCheck });
-    
+
     const recurringDates: Date[] = [];
     let current = startDateTime;
-    
+
     while (current <= endDateTime) {
       recurringDates.push(current.toJSDate());
       current = current.plus({ days: dayFrequency });
