@@ -204,14 +204,16 @@ export class NotificationsService {
       },
     });
 
+    return { count };
+  }
 
-    /**
-     * Cron job: Send daily morning notifications to customers about their schedules
-     * Runs every day at 8:00 AM
-     */
-    @Cron('0 8 * * *', {
-      timeZone: 'America/New_York',
-    })
+  /**
+   * Cron job: Send daily morning notifications to customers about their schedules
+   * Runs every day at 8:00 AM
+   */
+  @Cron('0 8 * * *', {
+    timeZone: 'America/New_York',
+  })
     async sendDailyCustomerNotifications() {
       this.logger.log('🔔 Running daily customer notifications job...');
 
@@ -417,10 +419,10 @@ export class NotificationsService {
       }
     }
 
-  /**
-   * Send notification when schedule status changes
-   */
-  async notifyScheduleStatusChange(
+    /**
+     * Send notification when schedule status changes
+     */
+    async notifyScheduleStatusChange(
       scheduleId: string,
       oldStatus: string,
       newStatus: string,
@@ -525,10 +527,10 @@ export class NotificationsService {
       }
     }
 
-  /**
-   * Send notifications when booking is rescheduled
-   */
-  async notifyReschedule(
+    /**
+     * Send notifications when booking is rescheduled
+     */
+    async notifyReschedule(
       oldScheduleId: string,
       newScheduleId: string,
       bookingId: string,
