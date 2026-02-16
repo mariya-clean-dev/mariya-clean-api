@@ -201,11 +201,13 @@ export class SchedulerService {
         where: {
           code: pincode,
           isActive: true,
+          deletedAt: null,
         },
         include: {
           zone: {
             where: {
               isActive: true,
+              deletedAt: null,
             },
           },
         },
@@ -1421,11 +1423,13 @@ export class SchedulerService {
         where: {
           code: pincode,
           isActive: true,
+          deletedAt: null,
         },
         include: {
           zone: {
             where: {
               isActive: true,
+              deletedAt: null,
             },
           },
         },
