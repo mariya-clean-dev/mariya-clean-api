@@ -58,7 +58,9 @@ export class SchedulerService {
     // Filter by zone if provided
     if (zoneId) {
       where.staffZone = {
-        zoneId,
+        is: {
+          zoneId,
+        },
       };
     }
 
@@ -265,7 +267,9 @@ export class SchedulerService {
 
     if (zoneId) {
       staffWhere.staffZone = {
-        zoneId,
+        is: {
+          zoneId,
+        },
       };
     }
 
@@ -275,12 +279,15 @@ export class SchedulerService {
     });
 
     if (staffList.length === 0) {
-      console.warn(`⚠️ No staff available in the zone`);
+      console.warn(`⚠️ No staff available in the zone${zoneId ? ` (zoneId: ${zoneId})` : ''}`);
       // Return all slots as unavailable
       const slots = generateTimeSlots();
       slots.forEach(slot => slot.isAvailable = false);
       return slots;
     }
+
+    console.log(`✅ Found ${staffList.length} staff in zone${zoneId ? ` (zoneId: ${zoneId})` : ''}`);
+
 
     const slots = generateTimeSlots();
     const bufferMins = 30;
@@ -1259,7 +1266,11 @@ export class SchedulerService {
       where: {
         role: { name: 'staff' },
         status: 'active',
-        staffZone: { zoneId },
+        staffZone: {
+          is: {
+            zoneId,
+          },
+        },
       },
       orderBy: { priority: 'asc' },
       select: { id: true, name: true },
@@ -1328,7 +1339,9 @@ export class SchedulerService {
 
     if (zoneId) {
       where.staffZone = {
-        zoneId,
+        is: {
+          zoneId,
+        },
       };
     }
 
@@ -1459,7 +1472,9 @@ export class SchedulerService {
 
     if (zoneId) {
       staffWhere.staffZone = {
-        zoneId,
+        is: {
+          zoneId,
+        },
       };
     }
 
