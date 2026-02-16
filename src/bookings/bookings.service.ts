@@ -17,7 +17,6 @@ import dayjs from 'dayjs';
 import { RescheduleDto } from './dto/reschedule.dto';
 import { CouponsService } from '../coupons/coupons.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
-import { NextUpcomingScheduleResponseDto } from './dto/next-upcoming-schedules.dto';
 
 @Injectable()
 export class BookingsService {
@@ -893,97 +892,82 @@ export class BookingsService {
     };
   }
 
-  async getNextUpcomingSchedules(
-    userId: string,
-  ): Promise<NextUpcomingScheduleResponseDto[]> {
+  async getNextUpcomingSchedules(userId: string) {
     // Find all active bookings for the user
-    const bookings = await this.prisma.booking.findMany({
+    const activeBookings = await this.prisma.booking.findMany({
       where: {
         userId,
         status: {
           in: [BookingStatus.booked, BookingStatus.in_progress, BookingStatus.pending],
         },
       },
-      include: {
-        service: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        bookingAddress: {
-          include: {
-            address: {
-              select: {
-                line_1: true,
-                line_2: true,
-                city: true,
-                state: true,
-                zip: true,
-              },
-            },
-          },
-        },
-        assignedStaff: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
+      select: {
+        id: true,
       },
     });
 
-    // Map each booking to include its next upcoming schedule
-    const results: NextUpcomingScheduleResponseDto[] = [];
+    const bookingIds = activeBookings.map((booking) => booking.id);
 
-    for (const booking of bookings) {
-      // Get the next upcoming schedule for this booking
-      const nextSchedule = await this.schedulerService.getNextScheduleForBooking(
-        booking.id,
-      );
-
-      // Only include bookings that have an upcoming schedule
-      if (nextSchedule) {
-        results.push({
-          bookingId: booking.id,
-          serviceName: booking.service.name,
-          serviceId: booking.service.id,
-          bookingStatus: booking.status,
-          bookingType: booking.type,
-          price: Number(booking.price),
-          address: booking.bookingAddress?.address
-            ? {
-                line_1: booking.bookingAddress.address.line_1,
-                line_2: booking.bookingAddress.address.line_2 || undefined,
-                city: booking.bookingAddress.address.city,
-                state: booking.bookingAddress.address.state || undefined,
-                zip: booking.bookingAddress.address.zip,
-              }
-            : undefined,
-          assignedStaff: booking.assignedStaff
-            ? {
-                id: booking.assignedStaff.id,
-                name: booking.assignedStaff.name,
-                email: booking.assignedStaff.email,
-                phone: booking.assignedStaff.phone || undefined,
-              }
-            : undefined,
-          nextSchedule: {
-            scheduleId: nextSchedule.id,
-            startTime: nextSchedule.startTime,
-            endTime: nextSchedule.endTime,
-            status: nextSchedule.status,
-            staffId: nextSchedule.staffId || undefined,
+    // For each booking, get the next upcoming schedule
+    const schedules = await Promise.all(
+      bookingIds.map(async (bookingId) => {
+        return this.prisma.schedule.findFirst({
+          where: {
+            bookingId,
+            isSkipped: false,
+            status: 'scheduled',
+            startTime: { gt: new Date() },
+          },
+          include: {
+            staff: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            booking: {
+              select: {
+                id: true,
+                status: true,
+                paymentMethod: true,
+                customer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    phone: true,
+                  },
+                },
+                service: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            startTime: 'asc',
           },
         });
-      }
-    }
+      }),
+    );
 
-    return results;
+    // Filter out null schedules and sort by start time
+    const data = schedules
+      .filter((schedule) => schedule !== null)
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+    return {
+      data,
+      meta: {
+        total: data.length,
+        page: 1,
+        limit: data.length,
+        totalPages: 1,
+      },
+    };
   }
 }

