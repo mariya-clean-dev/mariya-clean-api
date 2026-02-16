@@ -81,4 +81,10 @@ export class ZonesController {
   getStaffInZone(@Param('id') id: string) {
     return this.zonesService.getStaffInZone(id);
   }
+
+  @Delete('pincodes/:code')
+  @Roles('admin')
+  deletePincode(@Param('code') code: string) {
+    return this.zonesService.deletePincode(code);
+  }
 }

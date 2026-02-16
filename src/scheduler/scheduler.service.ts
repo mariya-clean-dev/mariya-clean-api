@@ -837,6 +837,7 @@ export class SchedulerService {
             day,
             startDateTime,
             endDateTime,
+            booking.zoneId,
           );
 
           if (availableStaff) {
@@ -985,6 +986,7 @@ export class SchedulerService {
         dayOfWeek,
         start,
         end,
+        booking.zoneId,
       );
 
       if (!staff && !isSkipped) {

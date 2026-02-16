@@ -192,6 +192,31 @@ export class ZonesService {
     });
   }
 
+  async deletePincode(code: string) {
+    // Check if pincode exists
+    const pincode = await this.prisma.pincode.findUnique({
+      where: { code },
+    });
+
+    if (!pincode) {
+      throw new NotFoundException(`Pincode ${code} not found`);
+    }
+
+    // Soft delete by setting deletedAt and isActive to false
+    await this.prisma.pincode.update({
+      where: { code },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+      },
+    });
+
+    return {
+      message: `Pincode ${code} has been successfully removed`,
+      code,
+    };
+  }
+
   async getPincodes(zoneId?: string) {
     const where: any = {
       isActive: true,
