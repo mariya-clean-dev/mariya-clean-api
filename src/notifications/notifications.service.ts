@@ -604,6 +604,4 @@ export class NotificationsService {
         this.logger.error(`❌ Error sending reschedule notification: ${error.message}`);
       }
     }
-    return { count };
-  }
 }
