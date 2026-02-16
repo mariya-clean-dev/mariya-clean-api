@@ -472,10 +472,10 @@ export class StripeWebhookController {
           const paymentMethodLabel = targetPaymentMethod === 'online' ? 'card payment' : 'bank account (ACH)';
           await this.notificationsService.createNotification({
             userId: userId,
-            type: NotificationType.status_change,
+            notificationType: NotificationType.status_change,
             title: 'Payment Method Updated',
             message: `Your payment method has been successfully updated to ${paymentMethodLabel}.`,
-            bookingId: bookingId,
+            relatedBookingId: bookingId,
           });
 
           // Return early - no need to create schedules for payment method updates

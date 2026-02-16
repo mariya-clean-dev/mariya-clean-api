@@ -9,7 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, PaymentMethodEnum } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ZonesService } from '../zones/zones.service';
 import { UsersService } from '../users/users.service';
@@ -971,7 +971,7 @@ export class BookingsService {
     };
   }
 
-  async updatePaymentMethod(bookingId: string, paymentMethod: string) {
+  async updatePaymentMethod(bookingId: string, paymentMethod: PaymentMethodEnum) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
     });
