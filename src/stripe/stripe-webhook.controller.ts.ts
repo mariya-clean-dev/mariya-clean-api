@@ -417,9 +417,9 @@ export class StripeWebhookController {
   }
 
   private async handleCheckoutSessionCompleted(session: any) {
-    const { bookingId, date, time, userId } = session.metadata || {};
+    const { bookingId, date, time, userId, paymentMethodUpdate, targetPaymentMethod } = session.metadata || {};
 
-    // 🧾 Handle sessions in setup mode (save card)
+    // 🧾 Handle sessions in setup mode (save card/bank)
     if (session.mode === 'setup') {
       const setupIntentId = session.setup_intent;
       if (!setupIntentId) {
@@ -453,7 +453,43 @@ export class StripeWebhookController {
           }
         }
       }
-      // ⛔ DO NOT RETURN — allow schedule generation to continue
+
+      // 🔄 Check if this is a payment method update for an existing booking
+      if (paymentMethodUpdate === 'true' && bookingId && targetPaymentMethod) {
+        try {
+          const booking = await this.prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+              paymentMethod: targetPaymentMethod,
+            },
+          });
+
+          console.log(
+            `✅ Booking ${bookingId} payment method updated to ${targetPaymentMethod}`,
+          );
+
+          // Send confirmation notification to user
+          const paymentMethodLabel = targetPaymentMethod === 'online' ? 'card payment' : 'bank account (ACH)';
+          await this.notificationsService.createNotification({
+            userId: userId,
+            type: NotificationType.status_change,
+            title: 'Payment Method Updated',
+            message: `Your payment method has been successfully updated to ${paymentMethodLabel}.`,
+            bookingId: bookingId,
+          });
+
+          // Return early - no need to create schedules for payment method updates
+          return;
+        } catch (err) {
+          console.error(
+            `❌ Failed to update payment method for booking ${bookingId}:`,
+            err,
+          );
+        }
+      }
+      
+      // If not a payment method update, continue with normal flow
+      // ⛔ DO NOT RETURN — allow schedule generation to continue for new bookings
     }
 
     // ✅ Validate metadata

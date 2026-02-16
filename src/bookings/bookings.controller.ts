@@ -17,6 +17,7 @@ import {
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdatePaymentMethodDto } from './dto/update-payment-method.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -573,37 +574,63 @@ export class BookingsController {
     );
   }
   @Post(':id/update-payment-method')
-  async createPaymentUpdateSession(@Param('id') id: string, @Request() req) {
+  async updatePaymentMethod(
+    @Param('id') id: string,
+    @Body() updatePaymentMethodDto: UpdatePaymentMethodDto,
+    @Request() req,
+  ) {
     const booking = await this.bookingsService.findOne(
       id,
       req.user.id,
       req.user.role,
     );
 
-    if (
-      req.user.role !== 'admin' &&
-      booking.userId !== req.user.id
-    ) {
+    if (req.user.role !== 'admin' && booking.userId !== req.user.id) {
       throw new ForbiddenException(
         'You do not have permission to access this booking',
       );
     }
 
+    const currentPaymentMethod = booking.paymentMethod;
+    const newPaymentMethod = updatePaymentMethodDto.paymentMethod;
+
+    // Scenario 1: Changing TO offline - Direct update (manual payment by staff)
+    if (newPaymentMethod === 'offline') {
+      const updatedBooking = await this.bookingsService.updatePaymentMethod(
+        id,
+        newPaymentMethod,
+      );
+
+      return this.responseService.successResponse(
+        'Payment method updated to offline. Payments will be handled manually by staff.',
+        updatedBooking,
+      );
+    }
+
+    // Scenario 2: Changing FROM offline TO online - Send Stripe link
+    // OR updating payment method (online to online with new card, offline to offline with new bank)
     const user = await this.prisma.user.findUnique({
       where: { id: booking.userId },
     });
 
-    if (!user ||!user.stripeCustomerId) {
-       throw new BadRequestException('User or Stripe customer not found');
+    if (!user || !user.stripeCustomerId) {
+      throw new BadRequestException('User or Stripe customer not found');
     }
 
+    // Create Stripe setup session for card/bank setup
     const session = await this.stripeService.createCardSetupSession({
       customerId: user.stripeCustomerId,
       successUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=true`,
       cancelUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=false`,
-      metadata: { bookingId: id, userId: user.id },
+      metadata: {
+        bookingId: id,
+        userId: user.id,
+        paymentMethodUpdate: 'true',
+        targetPaymentMethod: newPaymentMethod,
+      },
     });
 
+    // Send email to client with Stripe checkout link
     await this.mailService.sendPaymentUpdateEmail(
       user.email,
       user.name,
@@ -611,7 +638,7 @@ export class BookingsController {
     );
 
     return this.responseService.successResponse(
-      'Payment update email sent successfully',
+      'Payment setup email sent successfully. Please complete the setup to update your payment method.',
       { sessionUrl: session.url },
     );
   }

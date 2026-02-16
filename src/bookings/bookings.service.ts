@@ -970,4 +970,22 @@ export class BookingsService {
       },
     };
   }
+
+  async updatePaymentMethod(bookingId: string, paymentMethod: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    // Update the booking payment method
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { paymentMethod },
+    });
+
+    return updatedBooking;
+  }
 }
