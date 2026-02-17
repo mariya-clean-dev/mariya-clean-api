@@ -79,7 +79,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
 
       const userId = payload.sub;
-      
+
       if (!userId) {
         console.error(`[ChatGateway] ❌ No user ID in token payload`);
         client.emit('error', { message: 'Invalid token payload' });

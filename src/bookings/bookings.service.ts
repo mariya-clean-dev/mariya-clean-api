@@ -405,7 +405,35 @@ export class BookingsService {
     //   );
     // }
 
-    return booking;
+    // Get next upcoming schedule for this booking
+    let nextSchedule = null;
+    if (booking.status !== BookingStatus.cancelled) {
+      nextSchedule = await this.prisma.schedule.findFirst({
+        where: {
+          bookingId: id,
+          isSkipped: false,
+          status: 'scheduled',
+          startTime: { gt: new Date() },
+        },
+        include: {
+          staff: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: {
+          startTime: 'asc',
+        },
+      });
+    }
+
+    return {
+      ...booking,
+      nextSchedule,
+    };
   }
 
   // async reschedule(id: string, userId: string, rescheduleDto: RescheduleDto) {
@@ -987,5 +1015,70 @@ export class BookingsService {
     });
 
     return updatedBooking;
+  }
+
+  async getNextUpcomingScheduleForBooking(bookingId: string) {
+    // First, check if the booking exists and get its status
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { 
+        id: true, 
+        status: true 
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    // If booking is canceled, return null
+    if (booking.status === BookingStatus.cancelled) {
+      return null;
+    }
+
+    // Get the next upcoming schedule for this booking
+    const nextSchedule = await this.prisma.schedule.findFirst({
+      where: {
+        bookingId,
+        isSkipped: false,
+        status: 'scheduled',
+        startTime: { gt: new Date() },
+      },
+      include: {
+        staff: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        booking: {
+          select: {
+            id: true,
+            status: true,
+            paymentMethod: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+            service: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    return nextSchedule;
   }
 }

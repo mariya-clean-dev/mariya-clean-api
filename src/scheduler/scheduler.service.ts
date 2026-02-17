@@ -99,6 +99,7 @@ export class SchedulerService {
     startDate?: Date,
     endDate?: Date,
     status?: string,
+    userId?: string,
   ) {
     const where: any = {};
 
@@ -112,6 +113,13 @@ export class SchedulerService {
 
     if (bookingId) {
       where.bookingId = bookingId;
+    }
+
+    // If userId is provided, filter schedules by bookings belonging to that user
+    if (userId) {
+      where.booking = {
+        userId: userId,
+      };
     }
 
     if (startDate || endDate) {

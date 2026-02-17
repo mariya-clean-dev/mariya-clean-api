@@ -84,7 +84,6 @@ export class SchedulerController {
   }
 
   @Get('schedules')
-  @Roles('admin', 'staff')
   async getSchedules(
     @Request() req: any,
     @Query('staffId') staffId?: string,
@@ -94,11 +93,28 @@ export class SchedulerController {
     @Query('limit') limit?: number,
     @Query('startDate') startDate?: Date,
     @Query('endDate') endDate?: Date,
+    @Query('userId') userId?: string,
   ) {
     const user = req.user;
-    if (user.role == 'staff') {
+    
+    // Staff can only see their own schedules
+    if (user.role === 'staff') {
       staffId = user.id;
+      userId = undefined; // Staff cannot filter by userId
     }
+    
+    // Normal users (customers) can only see their own schedules
+    if (user.role !== 'admin' && user.role !== 'staff') {
+      userId = user.id; // Force userId to be the logged-in user
+      staffId = undefined; // Normal users cannot filter by staffId
+    }
+    
+    // Admin can filter by userId if provided, otherwise see all
+    if (user.role === 'admin' && userId) {
+      // Admin explicitly filtering by a specific user
+      staffId = undefined;
+    }
+    
     const schedules = await this.schedulerService.findAll(
       page,
       limit,
@@ -107,6 +123,7 @@ export class SchedulerController {
       startDate,
       endDate,
       status,
+      userId,
     );
     return this.resposneService.successResponse(
       'Schedules retrieved successfully',

@@ -35,17 +35,17 @@ console.log('');
 // Decode without verification first
 try {
     const decoded = jwt.decode(token, { complete: true });
-    
+
     if (!decoded) {
         console.error('❌ Failed to decode token - invalid JWT format');
         process.exit(1);
     }
-    
+
     console.log('📋 Token Header:');
     console.log('   Algorithm:', decoded.header.alg);
     console.log('   Type:', decoded.header.typ);
     console.log('');
-    
+
     console.log('📋 Token Payload:');
     console.log('   Email:', decoded.payload.email || 'N/A');
     console.log('   User ID (sub):', decoded.payload.sub || '❌ MISSING');
@@ -53,7 +53,7 @@ try {
     console.log('   Issued At:', decoded.payload.iat ? new Date(decoded.payload.iat * 1000).toISOString() : 'N/A');
     console.log('   Expires At:', decoded.payload.exp ? new Date(decoded.payload.exp * 1000).toISOString() : 'Never');
     console.log('');
-    
+
     // Check if expired
     if (decoded.payload.exp) {
         const now = Math.floor(Date.now() / 1000);
@@ -70,34 +70,34 @@ try {
             console.log(`✅ Token is still valid (${minutesLeft} minutes remaining)`);
         }
     }
-    
+
     // Check if user ID exists
     if (!decoded.payload.sub) {
         console.error('❌ CRITICAL: Token payload missing "sub" field (user ID)');
         console.error('   WebSocket connection will fail without user ID');
         process.exit(1);
     }
-    
+
     console.log('');
-    
+
     // Try to verify with JWT_SECRET
     console.log('🔐 Attempting to verify with JWT_SECRET...');
-    
+
     // Load .env file if available
     try {
         require('dotenv').config();
     } catch (e) {
         // dotenv not installed, continuing without it
     }
-    
+
     const secret = process.env.JWT_SECRET || 'your-secret-key';
-    
+
     if (!process.env.JWT_SECRET) {
         console.warn('⚠️  JWT_SECRET not found in environment, using default: "your-secret-key"');
     } else {
         console.log('✅ JWT_SECRET loaded from environment');
     }
-    
+
     try {
         const verified = jwt.verify(token, secret);
         console.log('✅ Token verification successful!');
@@ -121,7 +121,7 @@ try {
         console.error('  - Generate a new token by logging in again');
         process.exit(1);
     }
-    
+
 } catch (error) {
     console.error('❌ Error decoding token:', error.message);
     console.error('');

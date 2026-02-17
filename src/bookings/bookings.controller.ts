@@ -477,6 +477,26 @@ export class BookingsController {
     return this.responseService.successResponse('Booking details', booking);
   }
 
+  @Get(':id/next-schedule')
+  async getNextScheduleForBooking(@Param('id') id: string, @Request() req) {
+    // Verify user has access to this booking
+    await this.bookingsService.findOne(id, req.user.id, req.user.role);
+    
+    const nextSchedule = await this.bookingsService.getNextUpcomingScheduleForBooking(id);
+    
+    if (!nextSchedule) {
+      return this.responseService.successResponse(
+        'No upcoming schedule found (booking may be canceled)',
+        null,
+      );
+    }
+    
+    return this.responseService.successResponse(
+      'Next upcoming schedule',
+      nextSchedule,
+    );
+  }
+
   @Patch(':id')
   async update(
     @Param('id') id: string,
