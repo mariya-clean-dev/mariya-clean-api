@@ -21,7 +21,7 @@ interface AuthenticatedSocket extends Socket {
     origin: "*", // Configure this based on your frontend URL
     credentials: true,
   },
-  namespace: "/chat",
+  namespace: "chat",
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
