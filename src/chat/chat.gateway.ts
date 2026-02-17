@@ -44,8 +44,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      console.log(`[ChatGateway] Connection attempt from client: ${client.id}`);
-      
+      console.log(`[ChatGateway] 🔌 Connection attempt from client: ${client.id}`);
+      console.log(`[ChatGateway] 📋 Handshake auth:`, client.handshake.auth);
+      console.log(`[ChatGateway] 📋 Headers:`, client.handshake.headers.authorization ? 'Present' : 'Missing');
+
       // Extract token from handshake
       const token =
         client.handshake.auth?.token ||
@@ -53,16 +55,38 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
       if (!token) {
         console.log(`[ChatGateway] ❌ No token provided by client: ${client.id}`);
+        client.emit('error', { message: 'Authentication token required' });
         client.disconnect();
         return;
       }
 
+      console.log(`[ChatGateway] 🔑 Token received (length: ${token.length})`);
+      console.log(`[ChatGateway] 🔐 JWT_SECRET configured: ${process.env.JWT_SECRET ? 'Yes' : 'No (using default)'}`);
+
       // Verify JWT token
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || "your-secret-key",
-      });
+      let payload;
+      try {
+        payload = await this.jwtService.verifyAsync(token, {
+          secret: process.env.JWT_SECRET || "your-secret-key",
+        });
+        console.log(`[ChatGateway] ✅ Token verified successfully`);
+        console.log(`[ChatGateway] 👤 User ID from token:`, payload.sub);
+      } catch (jwtError) {
+        console.error(`[ChatGateway] ❌ JWT verification failed:`, jwtError.message);
+        client.emit('error', { message: 'Invalid or expired token' });
+        client.disconnect();
+        return;
+      }
 
       const userId = payload.sub;
+      
+      if (!userId) {
+        console.error(`[ChatGateway] ❌ No user ID in token payload`);
+        client.emit('error', { message: 'Invalid token payload' });
+        client.disconnect();
+        return;
+      }
+
       client.userId = userId;
 
       // Track user socket connections
@@ -77,9 +101,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       console.log(`[ChatGateway] ✅ Client connected: ${client.id}, User: ${userId}`);
 
       // Load and send any unread messages to the user
-      await this.sendUnreadMessagesToUser(client, userId);
+      try {
+        await this.sendUnreadMessagesToUser(client, userId);
+        console.log(`[ChatGateway] 📬 Unread messages loaded for user: ${userId}`);
+      } catch (messageError) {
+        console.error(`[ChatGateway] ⚠️ Error loading unread messages (non-fatal):`, messageError.message);
+        // Don't disconnect - this is not critical
+      }
+
+      console.log(`[ChatGateway] 🎉 Connection fully established for user: ${userId}`);
     } catch (error) {
-      console.error(`[ChatGateway] ❌ Authentication error:`, error.message);
+      console.error(`[ChatGateway] ❌ Unexpected error in handleConnection:`, error);
+      console.error(`[ChatGateway] ❌ Error stack:`, error.stack);
+      client.emit('error', { message: 'Connection failed: ' + error.message });
       client.disconnect();
     }
   }

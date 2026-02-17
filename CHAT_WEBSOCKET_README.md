@@ -612,7 +612,20 @@ socket.emit('sendMessage', { recipientId, content }, (response) => {
 
 ## Testing
 
-### Quick Connection Test
+### Step 1: Verify Your JWT Token
+Before testing the connection, verify your JWT token is valid:
+
+```bash
+node verify-jwt-token.js YOUR_JWT_TOKEN
+```
+
+This will check:
+- Token format and structure
+- Token expiration
+- Payload contents (user ID, email, role)
+- Signature verification with JWT_SECRET
+
+### Step 2: Test WebSocket Connection
 Use the provided test script to verify your WebSocket connection:
 
 ```bash
@@ -620,17 +633,30 @@ Use the provided test script to verify your WebSocket connection:
 npm run start:dev
 
 # 2. Get a JWT token (from login endpoint)
-# 3. Run the test script
+# 3. Verify it first
+node verify-jwt-token.js YOUR_JWT_TOKEN
+
+# 4. Run the connection test
 node test-websocket-connection.js YOUR_JWT_TOKEN
 ```
 
 The script will:
 - Attempt to connect to the WebSocket server
-- Show connection status and errors
+- Show connection status and detailed errors
 - Verify authentication
 - Display helpful debugging information
 
-### Using Postman (WebSocket Support)
+**Watch server logs** for detailed connection information:
+```
+[ChatGateway] 🚀 WebSocket Gateway initialized
+[ChatGateway] 🔌 Connection attempt from client: abc123
+[ChatGateway] 🔑 Token received (length: 250)
+[ChatGateway] ✅ Token verified successfully
+[ChatGateway] 👤 User ID from token: user-id-here
+[ChatGateway] ✅ Client connected: abc123, User: user-id-here
+```
+
+### Step 3: Check Server Logs
 1. Create a new WebSocket request
 2. URL: `ws://localhost:3000/chat`
 3. Add headers: `Authorization: Bearer your-jwt-token`
@@ -672,6 +698,47 @@ socket-io-client-tool \
 ---
 
 ## Troubleshooting
+
+### Client Disconnects Immediately
+
+If the client connects briefly and then disconnects immediately:
+
+**1. Verify JWT Token:**
+```bash
+node verify-jwt-token.js YOUR_JWT_TOKEN
+```
+
+Common token issues:
+- Token is expired
+- Token missing `sub` field (user ID)
+- Token signed with different JWT_SECRET
+- Invalid token format
+
+**2. Check Server Logs:**
+Look for these error patterns:
+```
+[ChatGateway] ❌ No token provided by client
+[ChatGateway] ❌ JWT verification failed: jwt expired
+[ChatGateway] ❌ JWT verification failed: invalid signature
+[ChatGateway] ❌ No user ID in token payload
+```
+
+**3. Verify JWT_SECRET:**
+Make sure the same JWT_SECRET is used for:
+- Generating tokens (auth service)
+- Verifying tokens (WebSocket gateway)
+
+Check your `.env` file has:
+```
+JWT_SECRET=your-secret-key-here
+```
+
+**4. Test Connection:**
+```bash
+node test-websocket-connection.js YOUR_JWT_TOKEN
+```
+
+Watch both client output AND server logs simultaneously.
 
 ### Connection Timeout Error
 If you get `timeout` or `connect timeout` errors:
