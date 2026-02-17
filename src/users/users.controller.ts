@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { UsersService } from './users.service';
@@ -75,10 +76,20 @@ export class UsersController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
-  @Roles('admin')
-  async findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  async findOne(@Request() req, @Param('id') id: string) {
+    // Allow access if: user is requesting their own data, OR user is admin/staff
+    const isOwnData = req.user.id === id;
+    const isAdmin = req.user.role === 'admin';
+    const isStaff = req.user.role === 'staff';
+
+    if (!isOwnData && !isAdmin && !isStaff) {
+      throw new UnauthorizedException(
+        'You do not have permission to access this user data',
+      );
+    }
+
+    const user = await this.usersService.findOne(id);
+    return this.responseService.successResponse('User Found', user);
   }
 
   @Patch('profile')
