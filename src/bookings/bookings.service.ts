@@ -407,7 +407,7 @@ export class BookingsService {
 
     // Get next upcoming schedule for this booking
     let nextSchedule = null;
-    if (booking.status !== BookingStatus.cancelled) {
+    if (booking.status !== BookingStatus.canceled) {
       nextSchedule = await this.prisma.schedule.findFirst({
         where: {
           bookingId: id,
@@ -1032,7 +1032,7 @@ export class BookingsService {
     }
 
     // If booking is canceled, return null
-    if (booking.status === BookingStatus.cancelled) {
+    if (booking.status === BookingStatus.canceled) {
       return null;
     }
 
