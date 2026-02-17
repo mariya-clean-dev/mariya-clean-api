@@ -30,7 +30,12 @@ The WebSocket connection requires JWT authentication. The token can be provided 
 const socket = io('ws://localhost:3000/chat', {
   auth: {
     token: 'your-jwt-token'
-  }
+  },
+  transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  timeout: 20000, // 20 seconds timeout
 });
 ```
 
@@ -39,7 +44,12 @@ const socket = io('ws://localhost:3000/chat', {
 const socket = io('ws://localhost:3000/chat', {
   extraHeaders: {
     Authorization: 'Bearer your-jwt-token'
-  }
+  },
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  timeout: 20000,
 });
 ```
 
@@ -352,7 +362,12 @@ class ChatWebSocket {
     this.socket = io('ws://localhost:3000/chat', {
       auth: {
         token: token
-      }
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
     this.setupListeners();
@@ -496,7 +511,12 @@ export const useChatWebSocket = (token) => {
 
     // Create socket connection
     socketRef.current = io('ws://localhost:3000/chat', {
-      auth: { token }
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
     const socket = socketRef.current;
@@ -592,6 +612,24 @@ socket.emit('sendMessage', { recipientId, content }, (response) => {
 
 ## Testing
 
+### Quick Connection Test
+Use the provided test script to verify your WebSocket connection:
+
+```bash
+# 1. Make sure server is running
+npm run start:dev
+
+# 2. Get a JWT token (from login endpoint)
+# 3. Run the test script
+node test-websocket-connection.js YOUR_JWT_TOKEN
+```
+
+The script will:
+- Attempt to connect to the WebSocket server
+- Show connection status and errors
+- Verify authentication
+- Display helpful debugging information
+
 ### Using Postman (WebSocket Support)
 1. Create a new WebSocket request
 2. URL: `ws://localhost:3000/chat`
@@ -634,6 +672,46 @@ socket-io-client-tool \
 ---
 
 ## Troubleshooting
+
+### Connection Timeout Error
+If you get `timeout` or `connect timeout` errors:
+
+**Server-side fixes:**
+1. Ensure the NestJS server is running (`npm run start:dev`)
+2. Verify ChatGateway is properly configured with `transports: ['websocket', 'polling']`
+3. Check that no firewall is blocking WebSocket connections
+4. Restart the server after making gateway configuration changes
+
+**Client-side fixes:**
+```javascript
+// Use this configuration to handle timeouts better
+const socket = io('ws://localhost:3000/chat', {
+  auth: { token: 'your-jwt-token' },
+  transports: ['websocket', 'polling'], // Essential for fallback
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  timeout: 20000, // Increase timeout to 20s
+  forceNew: true, // Force new connection
+});
+
+// Add error handlers
+socket.on('connect_error', (error) => {
+  console.error('Connection error:', error.message);
+  // Check if it's an auth error or network error
+});
+
+socket.on('connect_timeout', (timeout) => {
+  console.error('Connection timeout:', timeout);
+});
+```
+
+**Debug steps:**
+1. Check server logs for any errors
+2. Verify the server URL is correct (ws://localhost:3000/chat)
+3. Test with `curl http://localhost:3000` to ensure server is running
+4. Try connecting with polling only: `transports: ['polling']`
+5. Check browser console for detailed error messages
 
 ### Invalid Namespace Error
 If you get `Invalid namespace` error:

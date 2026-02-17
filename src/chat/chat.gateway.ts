@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   MessageBody,
   ConnectedSocket,
 } from "@nestjs/websockets";
@@ -22,8 +23,9 @@ interface AuthenticatedSocket extends Socket {
     credentials: true,
   },
   namespace: "chat",
+  transports: ['websocket', 'polling'], // Allow both WebSocket and polling
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -34,14 +36,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private jwtService: JwtService
   ) { }
 
+  afterInit(server: Server) {
+    console.log('[ChatGateway] 🚀 WebSocket Gateway initialized');
+    console.log('[ChatGateway] 📡 Namespace: /chat');
+    console.log('[ChatGateway] 🔌 Transports: websocket, polling');
+  }
+
   async handleConnection(client: AuthenticatedSocket) {
     try {
+      console.log(`[ChatGateway] Connection attempt from client: ${client.id}`);
+      
       // Extract token from handshake
       const token =
         client.handshake.auth?.token ||
         client.handshake.headers?.authorization?.split(" ")[1];
 
       if (!token) {
+        console.log(`[ChatGateway] ❌ No token provided by client: ${client.id}`);
         client.disconnect();
         return;
       }
@@ -63,12 +74,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Join user to their personal room
       client.join(`user:${userId}`);
 
-      console.log(`Client connected: ${client.id}, User: ${userId}`);
+      console.log(`[ChatGateway] ✅ Client connected: ${client.id}, User: ${userId}`);
 
       // Load and send any unread messages to the user
       await this.sendUnreadMessagesToUser(client, userId);
     } catch (error) {
-      console.error("Authentication error:", error.message);
+      console.error(`[ChatGateway] ❌ Authentication error:`, error.message);
       client.disconnect();
     }
   }
@@ -84,7 +95,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
     }
-    console.log(`Client disconnected: ${client.id}`);
+    console.log(`[ChatGateway] 🔌 Client disconnected: ${client.id}, User: ${userId || 'unknown'}`);
   }
 
   @SubscribeMessage("sendMessage")
