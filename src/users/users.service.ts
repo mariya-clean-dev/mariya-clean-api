@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -255,7 +256,58 @@ export class UsersService {
 
   async remove(id: string) {
     // Check if user exists
-    await this.findOne(id);
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    // For staff users, run pre-delete dependency checks
+    if (user.role?.name === 'staff') {
+      const blockingReasons: string[] = [];
+
+      // Check for active/upcoming schedules assigned to this staff member
+      const activeSchedules = await this.prisma.schedule.count({
+        where: {
+          staffId: id,
+          status: {
+            notIn: ['completed', 'canceled', 'missed', 'refunded'],
+          },
+        },
+      });
+
+      if (activeSchedules > 0) {
+        blockingReasons.push(
+          `Staff has ${activeSchedules} active/upcoming schedule(s) assigned`,
+        );
+      }
+
+      // Check for active bookings assigned to this staff member
+      const activeBookings = await this.prisma.booking.count({
+        where: {
+          assignedStaffId: id,
+          status: {
+            notIn: ['completed', 'canceled', 'rejected'],
+          },
+        },
+      });
+
+      if (activeBookings > 0) {
+        blockingReasons.push(
+          `Staff has ${activeBookings} active/in-progress booking(s) assigned`,
+        );
+      }
+
+      if (blockingReasons.length > 0) {
+        throw new BadRequestException({
+          message: `Cannot delete staff member. Please resolve all dependencies first.`,
+          reasons: blockingReasons,
+        });
+      }
+    }
 
     // Delete user
     await this.prisma.user.delete({
