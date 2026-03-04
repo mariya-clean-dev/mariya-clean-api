@@ -32,7 +32,7 @@ export class SchedulerController {
   constructor(
     private readonly schedulerService: SchedulerService,
     private readonly resposneService: ResponseService,
-  ) {}
+  ) { }
 
   @Post('auto-schedules')
   @UseGuards(RolesGuard)
@@ -96,25 +96,25 @@ export class SchedulerController {
     @Query('userId') userId?: string,
   ) {
     const user = req.user;
-    
+
     // Staff can only see their own schedules
     if (user.role === 'staff') {
       staffId = user.id;
       userId = undefined; // Staff cannot filter by userId
     }
-    
+
     // Normal users (customers) can only see their own schedules
     if (user.role !== 'admin' && user.role !== 'staff') {
       userId = user.id; // Force userId to be the logged-in user
       staffId = undefined; // Normal users cannot filter by staffId
     }
-    
+
     // Admin can filter by userId if provided, otherwise see all
     if (user.role === 'admin' && userId) {
       // Admin explicitly filtering by a specific user
       staffId = undefined;
     }
-    
+
     const schedules = await this.schedulerService.findAll(
       page,
       limit,

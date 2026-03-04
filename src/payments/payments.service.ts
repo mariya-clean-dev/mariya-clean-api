@@ -257,8 +257,9 @@ export class PaymentsService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // If user already has a Stripe customer ID, return it
-    if (user.stripeCustomerId) {
+    // If user already has a valid Stripe customer ID, return it
+    // Treat empty strings as missing IDs
+    if (user.stripeCustomerId && user.stripeCustomerId.trim() !== '') {
       return user.stripeCustomerId;
     }
 

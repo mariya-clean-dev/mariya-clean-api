@@ -28,7 +28,7 @@ export class BookingsService {
     private readonly couponsService: CouponsService,
     @Inject(forwardRef(() => SchedulerService))
     private readonly schedulerService: SchedulerService,
-  ) {}
+  ) { }
 
   async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
     let updatedPrice = createBookingDto.price;
@@ -111,7 +111,7 @@ export class BookingsService {
     // Apply coupon discount if provided
     let discountAmount = 0;
     let couponId: string | null = null;
-    
+
     if (createBookingDto.couponCode) {
       try {
         const couponValidation = await this.couponsService.validateCoupon(
@@ -119,7 +119,7 @@ export class BookingsService {
           userId,
           updatedPrice,
         );
-        
+
         discountAmount = couponValidation.discountAmount;
         updatedPrice = couponValidation.finalAmount;
         couponId = couponValidation.coupon.id;
@@ -230,13 +230,13 @@ export class BookingsService {
     try {
       // Get all admin users
       const adminUsers = await this.usersService.findByRole('admin');
-      
+
       // Get all staff users
       const staffUsers = await this.usersService.findByRole('staff');
-      
+
       // Combine admin and staff users
       const usersToNotify = [...adminUsers, ...staffUsers];
-      
+
       // Send notification to each admin and staff user
       for (const user of usersToNotify) {
         await this.notificationsService.createNotification({
@@ -1021,9 +1021,9 @@ export class BookingsService {
     // First, check if the booking exists and get its status
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { 
-        id: true, 
-        status: true 
+      select: {
+        id: true,
+        status: true
       },
     });
 

@@ -22,6 +22,10 @@ export class StripeService {
 
   // Create a setupIntent method instead of directly accessing the stripe client
   async createSetupIntent(customerId: string): Promise<Stripe.SetupIntent> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.setupIntents.create({
       customer: customerId,
       payment_method_types: ['card'],
@@ -50,7 +54,8 @@ export class StripeService {
       metadata: meta,
     };
 
-    if (customerId) {
+    // Only add customer if it's provided and not empty
+    if (customerId && customerId.trim() !== '') {
       paymentIntentData.customer = customerId;
     }
 
@@ -67,6 +72,10 @@ export class StripeService {
 
   // Retrieve a Stripe customer
   async getCustomer(customerId: string): Promise<Stripe.Customer> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.customers.retrieve(
       customerId,
     ) as Promise<Stripe.Customer>;
@@ -77,6 +86,10 @@ export class StripeService {
     customerId: string,
     updateData: Stripe.CustomerUpdateParams,
   ): Promise<Stripe.Customer> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.customers.update(customerId, updateData);
   }
 
@@ -85,6 +98,10 @@ export class StripeService {
     customerId: string,
     paymentMethodId: string,
   ): Promise<Stripe.PaymentMethod> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.paymentMethods.attach(paymentMethodId, {
       customer: customerId,
     });
@@ -95,6 +112,10 @@ export class StripeService {
     customerId: string,
     paymentMethodId: string,
   ): Promise<Stripe.Customer> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.customers.update(customerId, {
       invoice_settings: {
         default_payment_method: paymentMethodId,
@@ -107,6 +128,10 @@ export class StripeService {
     customerId: string,
     type: Stripe.PaymentMethodListParams.Type = 'card',
   ): Promise<Stripe.ApiList<Stripe.PaymentMethod>> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.paymentMethods.list({
       customer: customerId,
       type,
@@ -124,6 +149,10 @@ export class StripeService {
     cancelUrl: string;
     metadata?: any;
   }): Promise<Stripe.Checkout.Session> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return this.stripeClient.checkout.sessions.create({
       mode: 'setup',
       customer: customerId,
@@ -141,6 +170,10 @@ export class StripeService {
     paymentMethodId: string;
     metadata?: Record<string, string>;
   }) {
+    if (!params.customerId || params.customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     try {
       return await this.stripeClient.paymentIntents.create({
         amount: params.amount,
@@ -176,6 +209,10 @@ export class StripeService {
     successUrl: string;
     cancelUrl: string;
   }) {
+    if (!customer || customer.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     return await this.stripeClient.checkout.sessions.create({
       mode: 'subscription',
       customer,
@@ -198,6 +235,10 @@ export class StripeService {
     paymentMethodId?: string,
     metadata?: Record<string, string>,
   ): Promise<Stripe.Subscription> {
+    if (!customerId || customerId.trim() === '') {
+      throw new BadRequestException('Customer ID is required and cannot be empty');
+    }
+    
     // If a payment method is provided, make sure it's attached to the customer
     if (paymentMethodId) {
       await this.attachPaymentMethod(customerId, paymentMethodId);

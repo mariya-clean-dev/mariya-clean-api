@@ -60,7 +60,7 @@ export class BookingsController {
     private readonly subscrptionService: SubscriptionsService,
     private readonly schedulerService: SchedulerService,
     private readonly mailService: MailService,
-  ) {}
+  ) { }
 
   @Post()
   @Public()
@@ -125,7 +125,7 @@ export class BookingsController {
           .slice(0, 3)
           .map(d => d.toISOString().split('T')[0])
           .join(', ');
-        
+
         throw new ConflictException(
           `No staff available for all recurring dates. Unavailable dates include: ${unavailableDatesStr}${availabilityCheck.unavailableDates.length > 3 ? ' and more' : ''}`,
         );
@@ -151,7 +151,7 @@ export class BookingsController {
     // For online payment: create booking with 'pending' status
     // For offline payment: create booking with 'booked' status
     const bookingStatus = isOnlinePayment ? BookingStatus.pending : BookingStatus.booked;
-    
+
     const booking = await this.bookingsService.create(
       createBookingDto,
       user.id,
@@ -211,7 +211,7 @@ export class BookingsController {
         // Calculate week of month for recurring bookings
         const bookingDate = new Date(date);
         const weekOfMonth = this.getWeekOfMonth(bookingDate);
-        
+
         console.log(
           `📆 Creating MonthSchedule - DayOfWeek: ${dayOfWeek}, Time: ${time}, Week: ${weekOfMonth}`,
         );
@@ -238,7 +238,7 @@ export class BookingsController {
     }
 
     return this.responseService.successResponse(
-      isOnlinePayment 
+      isOnlinePayment
         ? 'Booking created. Please complete payment to confirm.'
         : 'Booking successfully confirmed.',
       {
@@ -481,16 +481,16 @@ export class BookingsController {
   async getNextScheduleForBooking(@Param('id') id: string, @Request() req) {
     // Verify user has access to this booking
     await this.bookingsService.findOne(id, req.user.id, req.user.role);
-    
+
     const nextSchedule = await this.bookingsService.getNextUpcomingScheduleForBooking(id);
-    
+
     if (!nextSchedule) {
       return this.responseService.successResponse(
         'No upcoming schedule found (booking may be canceled)',
         null,
       );
     }
-    
+
     return this.responseService.successResponse(
       'Next upcoming schedule',
       nextSchedule,
@@ -575,19 +575,19 @@ export class BookingsController {
     @Request() req,
   ) {
     const { year, month, staffId } = query;
-    
+
     // If user is staff, they can only see their own data
     let filterStaffId = staffId;
     if (req.user.role === 'staff') {
       filterStaffId = req.user.id;
     }
-    
+
     const heatmapData = await this.bookingsService.getBookingHeatmap(
       year,
       month,
       filterStaffId,
     );
-    
+
     return this.responseService.successResponse(
       'Booking heatmap calendar data',
       heatmapData,
