@@ -193,8 +193,9 @@ export class BookingsController {
         console.log('📱 PaymentIntent created for mobile:', paymentIntent.id);
       } else {
         // 🌐 Web Payment: Create Stripe checkout session (existing flow)
+        const stripeCustomerId = await this.paymentsService.getStripeCustomerId(user.id);
         const session = await this.stripeService.createCardSetupSession({
-          customerId: user.stripeCustomerId,
+          customerId: stripeCustomerId,
           successUrl: `${process.env.FRONTEND_URL}/payment-success?bookingId=${booking.id}`,
           cancelUrl: `${process.env.FRONTEND_URL}/payment-failed`,
           metadata: { bookingId: booking.id, userId: user.id, date, time },
@@ -633,13 +634,16 @@ export class BookingsController {
       where: { id: booking.userId },
     });
 
-    if (!user || !user.stripeCustomerId) {
-      throw new BadRequestException('User or Stripe customer not found');
+    if (!user) {
+      throw new BadRequestException('User not found');
     }
+
+    // Get or create a valid Stripe customer ID
+    const stripeCustomerId = await this.paymentsService.getStripeCustomerId(user.id);
 
     // Create Stripe setup session for card/bank setup
     const session = await this.stripeService.createCardSetupSession({
-      customerId: user.stripeCustomerId,
+      customerId: stripeCustomerId,
       successUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=true`,
       cancelUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=false`,
       metadata: {

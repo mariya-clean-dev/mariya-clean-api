@@ -95,6 +95,7 @@ export class StripeWebhookController {
     console.log('✅ Stripe event: payment_intent.succeeded');
 
     const stripePaymentId = paymentIntent.id;
+    const paymentMethodId = paymentIntent.payment_method; // Extract payment method ID
 
     // Step 1: Try to update existing pending transaction
     const updatedTx = await this.prisma.transaction.updateMany({
@@ -123,7 +124,22 @@ export class StripeWebhookController {
     // Step 2: Handle booking-based payments (mobile PaymentIntent flow)
     if (paymentIntent.metadata?.bookingId) {
       const bookingId = paymentIntent.metadata.bookingId;
+      const userId = paymentIntent.metadata.userId;
       const { date, time } = paymentIntent.metadata;
+
+      // 💾 Save payment method to user for future recurring payments
+      if (userId && paymentMethodId) {
+        try {
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { stripePaymentId: paymentMethodId },
+          });
+          console.log(`💳 Saved payment method ${paymentMethodId} for user ${userId}`);
+        } catch (error) {
+          console.error(`❌ Failed to save payment method for user ${userId}:`, error);
+        }
+      }
+
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {

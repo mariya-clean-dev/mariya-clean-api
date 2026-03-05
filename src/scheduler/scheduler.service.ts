@@ -447,9 +447,15 @@ export class SchedulerService {
       const amountInCents = Number(booking.price) * 100;
       const currency = 'usd';
 
-      if (!stripeCustomerId || !paymentMethodId) {
+      if (!stripeCustomerId) {
         throw new BadRequestException(
-          'Stripe customer or payment method ID missing',
+          'Stripe customer ID missing. Please contact support.',
+        );
+      }
+
+      if (!paymentMethodId) {
+        throw new BadRequestException(
+          'Payment method not found. Please update your payment method in the booking settings.',
         );
       }
 

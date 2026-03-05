@@ -257,10 +257,19 @@ export class PaymentsService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // If user already has a valid Stripe customer ID, return it
-    // Treat empty strings as missing IDs
+    // If user already has a Stripe customer ID, verify it exists in Stripe
     if (user.stripeCustomerId && user.stripeCustomerId.trim() !== '') {
-      return user.stripeCustomerId;
+      try {
+        // Verify the customer exists in Stripe
+        await this.stripeService.getCustomer(user.stripeCustomerId);
+        return user.stripeCustomerId;
+      } catch (error) {
+        // Customer doesn't exist in Stripe (deleted or invalid)
+        console.warn(
+          `Stripe customer ${user.stripeCustomerId} not found for user ${userId}. Creating new customer.`,
+        );
+        // Continue to create a new customer below
+      }
     }
 
     // Create a new Stripe customer
@@ -275,6 +284,7 @@ export class PaymentsService {
       data: { stripeCustomerId: customer.id },
     });
 
+    console.log(`Created new Stripe customer ${customer.id} for user ${userId}`);
     return customer.id;
   }
 
