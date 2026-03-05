@@ -644,8 +644,8 @@ export class BookingsController {
     // Create Stripe setup session for card/bank setup
     const session = await this.stripeService.createCardSetupSession({
       customerId: stripeCustomerId,
-      successUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=true`,
-      cancelUrl: `${process.env.FRONTEND_URL}/bookings/${id}?payment_updated=false`,
+      successUrl: `${process.env.FRONTEND_URL}`,
+      cancelUrl: `${process.env.FRONTEND_URL}`,
       metadata: {
         bookingId: id,
         userId: user.id,
