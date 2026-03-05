@@ -57,6 +57,8 @@ export class StripeService {
     // Only add customer if it's provided and not empty
     if (customerId && customerId.trim() !== '') {
       paymentIntentData.customer = customerId;
+      // Save payment method for future recurring payments
+      paymentIntentData.setup_future_usage = 'off_session';
     }
 
     return this.stripeClient.paymentIntents.create(paymentIntentData);
@@ -175,6 +177,28 @@ export class StripeService {
     }
     
     try {
+      // Ensure payment method is attached to customer before charging
+      try {
+        const paymentMethod = await this.stripeClient.paymentMethods.retrieve(
+          params.paymentMethodId,
+        );
+
+        // If payment method is not attached to this customer, attach it
+        if (paymentMethod.customer !== params.customerId) {
+          console.log(
+            `Attaching payment method ${params.paymentMethodId} to customer ${params.customerId}`,
+          );
+          await this.stripeClient.paymentMethods.attach(params.paymentMethodId, {
+            customer: params.customerId,
+          });
+        }
+      } catch (attachError) {
+        console.warn(
+          `Could not verify/attach payment method: ${attachError.message}`,
+        );
+        // Continue anyway - Stripe will give a better error if it fails
+      }
+
       return await this.stripeClient.paymentIntents.create({
         amount: params.amount,
         currency: params.currency,
