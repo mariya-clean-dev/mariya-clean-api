@@ -243,15 +243,18 @@ export class SchedulerService {
       const startDateTime = DateTime.fromJSDate(baseDate, { zone: 'UTC' }).startOf('day');
       const endDateTime = startDateTime.plus({ days: 60 });
 
+      const cycleWeeks: number = (plan as any).cycleWeeks ?? 1;
+      const fullCycleDays = plan.dayFrequency * cycleWeeks;
+
       simulatedDates = [];
       let current = startDateTime;
 
       while (current <= endDateTime) {
         simulatedDates.push(current.toJSDate());
-        current = current.plus({ days: plan.dayFrequency });
+        current = current.plus({ days: fullCycleDays });
       }
 
-      console.log(`📅 Checking ${simulatedDates.length} recurring dates for availability`);
+      console.log(`📅 Checking ${simulatedDates.length} recurring dates for availability (cycleWeeks=${cycleWeeks})`);
     } else {
       simulatedDates = [baseDate];
     }
@@ -335,18 +338,8 @@ export class SchedulerService {
   }
 
   async createMonthSchedules(schedules: CreateMonthScheduleDto[]) {
-    // Enhance schedules with weekOfMonth calculation
-    const enhancedSchedules = schedules.map(schedule => {
-      // If weekOfMonth is not provided, calculate it from the booking date
-      if (schedule.weekOfMonth === undefined || schedule.weekOfMonth === null) {
-        // We'll need the booking to get the date
-        return schedule;
-      }
-      return schedule;
-    });
-
     const created = await this.prisma.monthSchedule.createMany({
-      data: enhancedSchedules,
+      data: schedules as any,
     });
 
     return {
@@ -852,7 +845,7 @@ export class SchedulerService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           type: ServiceType.recurring,
-          status: { notIn: ['canceled', 'pending', 'completed'] }, // Exclude canceled, pending, and completed
+          status: { notIn: ['canceled', 'pending', 'completed'] },
           monthSchedules: { some: { dayOfWeek: day, skip: false } },
         },
         include: {
@@ -871,17 +864,47 @@ export class SchedulerService {
         current.setHours(0, 0, 0, 0);
 
         const dayFrequency = recurringType?.dayFrequency ?? 7;
+        const cycleWeeks: number | null = (recurringType as any)?.cycleWeeks ?? null;
+        const weekPattern: string | null = (recurringType as any)?.weekPattern ?? null;
+
         const msDiff = current.getTime() - bookingStartDate.getTime();
         const daysSinceBooking = Math.floor(msDiff / (1000 * 60 * 60 * 24));
 
-        // Skip if not part of recurring pattern
-        if (daysSinceBooking % dayFrequency !== 0) continue;
+        // Skip if not on the recurring day frequency
+        if (daysSinceBooking < 0 || daysSinceBooking % dayFrequency !== 0) continue;
 
-        const isSkipped = current > today && current < bookingStartDate; // ⬅️ Skipped but in future
+        // For bi_weekly / four_weekly: validate the cycle-week pattern
+        if (cycleWeeks && weekPattern) {
+          // occurrenceIndex = 0-based count of how many times this booking has fired
+          const occurrenceIndex = Math.floor(daysSinceBooking / dayFrequency);
+          // cyclePosition: 1-based position within cycle (1..cycleWeeks)
+          const cyclePosition = (occurrenceIndex % cycleWeeks) + 1;
 
-        const schedulesForDay = monthSchedules.filter(
-          (ms) => ms.dayOfWeek === day && !ms.skip,
-        );
+          if (cycleWeeks === 2) {
+            // bi_weekly: weekPattern is 'odd' or 'even'
+            const isOddOccurrence = cyclePosition === 1; // occurrence 1,3,5... → odd
+            if (weekPattern === 'odd' && !isOddOccurrence) continue;
+            if (weekPattern === 'even' && isOddOccurrence) continue;
+          } else if (cycleWeeks === 4) {
+            // four_weekly: weekPattern is '1','2','3','4'
+            if (weekPattern !== String(cyclePosition)) continue;
+          }
+        }
+
+        const isSkipped = current > today && current < bookingStartDate;
+
+        // Filter month schedules: if weekNumberInCycle is set, only match the correct cycle week
+        const schedulesForDay = monthSchedules.filter((ms) => {
+          if (ms.dayOfWeek !== day || ms.skip) return false;
+          const weekNumberInCycle: number | null | undefined = (ms as any).weekNumberInCycle;
+          if (weekNumberInCycle !== null && weekNumberInCycle !== undefined && cycleWeeks) {
+            const occurrenceIndex = Math.floor(daysSinceBooking / dayFrequency);
+            const cyclePosition = (occurrenceIndex % cycleWeeks) + 1;
+            return weekNumberInCycle === cyclePosition;
+          }
+          return true;
+        });
+
         if (schedulesForDay.length === 0) continue;
 
         const alreadyScheduled = await this.checkIfBookingScheduled(
@@ -928,7 +951,7 @@ export class SchedulerService {
               startTime: startDateTime.toISOString(),
               endTime: endDateTime.toISOString(),
               timezone: 'UTC',
-              isSkipped, // ✅ Skipped flag
+              isSkipped,
             });
 
             this.logger.log(
@@ -1005,44 +1028,85 @@ export class SchedulerService {
     } else if (type === 'recurring') {
       const recurringType = booking.recurringType;
       const dayFrequency = recurringType?.dayFrequency ?? 7;
-      const template = booking.monthSchedules.find((ms) => !ms.skip);
+      const cycleWeeks: number | null = (recurringType as any)?.cycleWeeks ?? null;
+      const weekPattern: string | null = (recurringType as any)?.weekPattern ?? null;
 
-      if (!template) {
+      // Group month schedule templates: for four_weekly/bi_weekly each weekNumberInCycle is separate
+      // For standard weekly just pick any non-skipped template
+      const templates = booking.monthSchedules.filter((ms) => !ms.skip);
+
+      if (templates.length === 0) {
         console.warn(`⚠️ No usable schedule template for booking ${bookingId}`);
         return;
       }
 
-      const { time, dayOfWeek } = template;
       const start = DateTime.fromJSDate(bookingStartDate, {
         zone: 'UTC',
       }).startOf('day');
       const end = start.plus({ days: durationInDays });
 
-      let hasSkipped = false;
+      if (cycleWeeks && cycleWeeks > 1) {
+        // ── Multi-week cycle (bi_weekly=2, four_weekly=4) ──────────────────────
+        // Each occurrence in the cycle fires every (dayFrequency * cycleWeeks) days from booking start
+        // e.g. four_weekly week-1 fires on day 0, week-2 on day 7, week-3 on day 14, week-4 on day 21,
+        //      then week-1 again on day 28, etc.
 
-      // 🔁 One skipped schedule before start date
-      let prev = start.minus({ days: dayFrequency });
-      if (prev.weekday % 7 === dayOfWeek % 7) {
-        scheduleDates.push({
-          date: prev.toJSDate(),
-          time,
-          dayOfWeek,
-          isSkipped: true,
-        });
-        hasSkipped = true;
-      }
-      // 🔁 Forward schedules from startDate to endDate
-      let current = start;
-      while (current <= end) {
-        if (current.weekday % 7 === dayOfWeek % 7) {
+        for (let cyclePos = 1; cyclePos <= cycleWeeks; cyclePos++) {
+          // Find the template for this cycle position, fallback to first template if not found
+          const template =
+            templates.find((ms) => (ms as any).weekNumberInCycle === cyclePos) ??
+            templates[0];
+          const { time, dayOfWeek } = template;
+
+          // The offset into the full cycle for this slot
+          const cycleOffsetDays = (cyclePos - 1) * dayFrequency;
+          // Full cycle length in days
+          const fullCycleDays = cycleWeeks * dayFrequency;
+
+          // Start scanning from bookingStart + cycleOffsetDays
+          let current = start.plus({ days: cycleOffsetDays });
+
+          while (current <= end) {
+            if (current.weekday % 7 === dayOfWeek % 7) {
+              scheduleDates.push({
+                date: current.toJSDate(),
+                time,
+                dayOfWeek,
+                isSkipped: false,
+              });
+            }
+            current = current.plus({ days: fullCycleDays });
+          }
+        }
+      } else {
+        // ── Standard weekly / daily / monthly ─────────────────────────────────
+        const template = templates[0];
+        const { time, dayOfWeek } = template;
+
+        // One skipped schedule before start date (for UI preview)
+        const prev = start.minus({ days: dayFrequency });
+        if (prev.weekday % 7 === dayOfWeek % 7) {
           scheduleDates.push({
-            date: current.toJSDate(),
+            date: prev.toJSDate(),
             time,
             dayOfWeek,
-            isSkipped: false,
+            isSkipped: true,
           });
         }
-        current = current.plus({ days: dayFrequency });
+
+        // Forward schedules from startDate to endDate
+        let current = start;
+        while (current <= end) {
+          if (current.weekday % 7 === dayOfWeek % 7) {
+            scheduleDates.push({
+              date: current.toJSDate(),
+              time,
+              dayOfWeek,
+              isSkipped: false,
+            });
+          }
+          current = current.plus({ days: dayFrequency });
+        }
       }
 
       scheduleDates.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -1291,8 +1355,8 @@ export class SchedulerService {
   }
 
   /**
-   * Check if staff is available for ALL recurring dates within 60 days
-   * Used before creating a recurring booking to ensure it can be fulfilled
+   * Check if staff is available for ALL recurring dates within 60 days.
+   * Handles weekly, bi_weekly (cycleWeeks=2), and four_weekly (cycleWeeks=4).
    */
   async checkStaffAvailabilityForRecurringBooking({
     startDate,
@@ -1300,12 +1364,14 @@ export class SchedulerService {
     dayFrequency,
     durationMins,
     zoneId,
+    cycleWeeks = 1,
   }: {
     startDate: Date;
-    time: string; // HH:mm format
-    dayFrequency: number; // days between occurrences
+    time: string;
+    dayFrequency: number;
     durationMins: number;
     zoneId: string;
+    cycleWeeks?: number;
   }): Promise<{
     isAvailable: boolean;
     unavailableDates: Date[];
@@ -1316,30 +1382,29 @@ export class SchedulerService {
     const totalDuration = durationMins + bufferMins;
     const daysToCheck = 60;
 
-    // Calculate all recurring dates within 60 days
     const startDateTime = DateTime.fromJSDate(startDate, { zone: 'UTC' }).startOf('day');
     const endDateTime = startDateTime.plus({ days: daysToCheck });
+    const normalizedCycleWeeks = cycleWeeks > 1 ? cycleWeeks : 1;
+    const fullCycleDays = dayFrequency * normalizedCycleWeeks;
 
+    // Generate all occurring dates across all cycle positions
     const recurringDates: Date[] = [];
-    let current = startDateTime;
-
-    while (current <= endDateTime) {
-      recurringDates.push(current.toJSDate());
-      current = current.plus({ days: dayFrequency });
+    for (let cyclePos = 0; cyclePos < normalizedCycleWeeks; cyclePos++) {
+      let current = startDateTime.plus({ days: cyclePos * dayFrequency });
+      while (current <= endDateTime) {
+        recurringDates.push(current.toJSDate());
+        current = current.plus({ days: fullCycleDays });
+      }
     }
+    recurringDates.sort((a, b) => a.getTime() - b.getTime());
 
-    console.log(`🔍 Checking availability for ${recurringDates.length} recurring dates`);
+    console.log(`🔍 Checking ${recurringDates.length} dates for availability (cycleWeeks=${normalizedCycleWeeks})`);
 
-    // Get all staff in the zone
     const staffInZone = await this.prisma.user.findMany({
       where: {
         role: { name: 'staff' },
         status: 'active',
-        staffZone: {
-          is: {
-            zoneId,
-          },
-        },
+        staffZone: { is: { zoneId } },
       },
       orderBy: { priority: 'asc' },
       select: { id: true, name: true },
@@ -1347,24 +1412,18 @@ export class SchedulerService {
 
     if (staffInZone.length === 0) {
       console.warn(`❌ No staff found in zone ${zoneId}`);
-      return {
-        isAvailable: false,
-        unavailableDates: recurringDates,
-        checkedDates: recurringDates,
-      };
+      return { isAvailable: false, unavailableDates: recurringDates, checkedDates: recurringDates };
     }
 
     console.log(`👥 Found ${staffInZone.length} staff in zone`);
 
     const unavailableDates: Date[] = [];
 
-    // Check each recurring date
     for (const date of recurringDates) {
       const startTime = new Date(date);
       startTime.setHours(hour, minute, 0, 0);
       const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
-      // Check if at least one staff member is available
       const availableStaff = await this.findAvailableStaffSlot(
         date,
         date.getDay(),
@@ -1382,11 +1441,11 @@ export class SchedulerService {
     }
 
     const isAvailable = unavailableDates.length === 0;
-
     return {
       isAvailable,
       unavailableDates,
       checkedDates: recurringDates,
+
     };
   }
 

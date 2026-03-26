@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
@@ -23,6 +24,8 @@ import { GetPriceEstimateDto } from './dto/get-price-estimate.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ResponseService } from 'src/response/response.service';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { Request } from 'express';
 
 @Controller('services')
 export class ServicesController {
@@ -125,15 +128,23 @@ export class ServicesController {
   }
 
   @Post('price-estimate')
-  @Public()
-  async getPriceEstimate(@Body() getPriceEstimateDto: GetPriceEstimateDto) {
+  @UseGuards(OptionalJwtAuthGuard)
+  async getPriceEstimate(
+    @Body() getPriceEstimateDto: GetPriceEstimateDto,
+    @Req() req: Request,
+  ) {
+    // Determine if the caller is an admin from the decoded JWT (if present)
+    const user = (req as any).user;
+    const isAdmin: boolean = user?.role === 'admin';
+
     const data = await this.servicesService.getPriceEstimate(
       getPriceEstimateDto.service_id,
       getPriceEstimateDto.square_feet,
       getPriceEstimateDto.no_of_rooms,
       getPriceEstimateDto.no_of_bathrooms,
       getPriceEstimateDto.isEcoCleaning,
-      getPriceEstimateDto.materialsProvidedByClient
+      getPriceEstimateDto.materialsProvidedByClient,
+      isAdmin,
     );
     return this.responseService.successResponse(
       'price estimation details',

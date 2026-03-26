@@ -71,6 +71,7 @@ enum RecurringTypeEnum {
   daily
   weekly
   bi_weekly
+  four_weekly
   monthly
 }
 
@@ -212,6 +213,10 @@ model RecurringType {
   description        String?   @db.Text
   dayFrequency       Int       @map("day_frequency")
   available_discount Decimal   @default(0) @db.Decimal(3, 1)
+  /// For bi_weekly: 'odd' | 'even'. For four_weekly: '1' | '2' | '3' | '4'. Null for others.
+  weekPattern        String?   @map("week_pattern") @db.VarChar(10)
+  /// Total weeks in cycle: 2 for bi_weekly, 4 for four_weekly, null for others
+  cycleWeeks         Int?      @map("cycle_weeks")
   bookings           Booking[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -265,14 +270,16 @@ model Booking {
 }
 
 model MonthSchedule {
-  id          String   @id @default(uuid())
-  bookingId   String   @map("booking_id")
-  weekOfMonth Int?     @map("week_of_month") //nullable
-  dayOfWeek   Int      @map("day_of_week") // 0 (Sunday) - 6 (Saturday)
-  time        String   @map("time")
-  skip        Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  bookingId         String   @map("booking_id")
+  weekOfMonth       Int?     @map("week_of_month") //nullable
+  dayOfWeek         Int      @map("day_of_week") // 0 (Sunday) - 6 (Saturday)
+  time              String   @map("time")
+  skip              Boolean  @default(false)
+  /// For bi_weekly/four_weekly: which week number within the cycle this occurrence falls on (1-4)
+  weekNumberInCycle Int?     @map("week_number_in_cycle")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   booking Booking @relation(fields: [bookingId], references: [id])
 

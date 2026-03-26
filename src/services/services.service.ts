@@ -6,7 +6,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { PriceType } from '@prisma/client';
 
 @Injectable()
 export class ServicesService {
@@ -229,6 +228,7 @@ export class ServicesService {
     no_of_bathrooms: number,
     isEcoCleaning: boolean,
     materialsProvidedByClient: boolean,
+    isAdmin: boolean = false,
   ) {
     // Fetch pricing parameters
     const service = await this.prisma.service.findUnique({
@@ -246,15 +246,15 @@ export class ServicesService {
       throw new Error('Service not found');
     }
 
-    const base_price = Number(service.base_price); // e.g. ₹20
-    const price_per_sqft = Number(service.square_foot_price); // e.g. ₹110
-    const price_per_room = Number(service.room_rate); // e.g. ₹115
-    const price_per_bathroom = Number(service.bathroom_rate); // e.g. ₹10
+    const base_price = Number(service.base_price);
+    const price_per_sqft = Number(service.square_foot_price);
+    const price_per_room = Number(service.room_rate);
+    const price_per_bathroom = Number(service.bathroom_rate);
 
     // Normalize counts
-    const roomCount = Math.max(0, no_of_rooms - 1); // First room included
-    const bathCount = Math.max(0, no_of_bathrooms - 1); // First bathroom included
-    const sqftMultiplier = Math.max(0, Math.ceil((square_feet - 1000) / 500)); // First 1000 sqft included
+    const roomCount = Math.max(0, no_of_rooms - 1);
+    const bathCount = Math.max(0, no_of_bathrooms - 1);
+    const sqftMultiplier = Math.max(0, Math.ceil((square_feet - 1000) / 500));
 
     // Base calculated price before any adjustments
     let baseCalculatedPrice =
@@ -271,22 +271,35 @@ export class ServicesService {
       baseCalculatedPrice *= 0.95;
     }
 
-    // Get recurring types
-    const recurringTypes = await this.prisma.recurringType.findMany();
+    // Get recurring types — admin sees multi-week cycle plans (four_weekly), regular users only see standard plans
+    const allRecurringTypes = await this.prisma.recurringType.findMany();
+
+    const recurringTypes = isAdmin
+      ? allRecurringTypes
+      : allRecurringTypes.filter((type) => {
+          // Filter out admin-only plans: four_weekly (cycleWeeks = 4) and any future multi-week cycles
+          const cycleWeeks: number | null = (type as any).cycleWeeks ?? null;
+          return !cycleWeeks || cycleWeeks <= 1;
+        });
 
     const estimates = recurringTypes.map((type) => {
       const discountPercent = Number(type.available_discount ?? 0);
       const discountAmount = baseCalculatedPrice * (discountPercent / 100);
       const finalPrice = Math.max(baseCalculatedPrice - discountAmount, 0);
+      const cycleWeeks: number | null = (type as any).cycleWeeks ?? null;
+      const weekPattern: string | null = (type as any).weekPattern ?? null;
 
       return {
         recurringTypeId: type.id,
         title: type.name,
         description: type.description,
         discountPercent,
-        finalPrice: this.roundToNearest10(finalPrice), // Round to nearest 10
+        finalPrice: this.roundToNearest10(finalPrice),
         isEcoCleaning,
         materialsProvidedByClient,
+        // Include cycle metadata so client can display correct labels
+        ...(cycleWeeks ? { cycleWeeks } : {}),
+        ...(weekPattern ? { weekPattern } : {}),
       };
     });
 
@@ -296,7 +309,7 @@ export class ServicesService {
       title: 'One Time',
       description: 'A Single time Cleaning Service',
       discountPercent: 0,
-      finalPrice: this.roundToNearest10(baseCalculatedPrice), // Round to nearest 10
+      finalPrice: this.roundToNearest10(baseCalculatedPrice),
       isEcoCleaning,
       materialsProvidedByClient,
     };
@@ -305,7 +318,7 @@ export class ServicesService {
     const totalDuration = (square_feet / 500) * service.durationMinutes;
     return {
       totalDuration,
-      baseCalculatedPrice: this.roundToNearest10(baseCalculatedPrice), // Round to nearest 10
+      baseCalculatedPrice: this.roundToNearest10(baseCalculatedPrice),
       estimates,
     };
   }

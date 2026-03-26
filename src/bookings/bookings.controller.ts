@@ -118,6 +118,7 @@ export class BookingsController {
           dayFrequency: recurringType.dayFrequency,
           durationMins,
           zoneId: zone.zone.id,
+          cycleWeeks: (recurringType as any).cycleWeeks ?? 1,
         });
 
       if (!availabilityCheck.isAvailable) {
@@ -233,8 +234,8 @@ export class BookingsController {
       await this.mailService.sendBookingConfirmationEmail(
         user.email,
         user.name,
-        booking.service.name,
-        booking.bookingAddress.address.line_1,
+        (booking as any).service?.name ?? '',
+        (booking as any).bookingAddress?.address?.line_1 ?? '',
       );
     }
 
