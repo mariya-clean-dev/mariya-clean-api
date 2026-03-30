@@ -13,6 +13,7 @@ import {
   ConflictException,
   NotFoundException,
   ForbiddenException,
+  Req,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -64,7 +65,10 @@ export class BookingsController {
 
   @Post()
   @Public()
-  async create(@Body() createBookingDto: CreateBookingDto) {
+  async create(
+    @Body() createBookingDto: CreateBookingDto,
+    @Req() req: any,
+  ) {
     console.log('📥 Incoming Booking DTO:', createBookingDto);
 
     const { type, date, time } = createBookingDto;
@@ -137,13 +141,38 @@ export class BookingsController {
       );
     }
 
-    const userData = {
-      name: createBookingDto.name,
-      email: createBookingDto.email,
-      phone: createBookingDto.phone,
-      role: 'customer',
-    };
-    const user = await this.usersService.findOrCreateUser(userData);
+    let user;
+
+    const requester = req.user; // may be undefined (Public route)
+
+    // 🔹 If admin → use email from DTO
+    if (requester && requester.role === 'admin') {
+      const userData = {
+        name: createBookingDto.name,
+        email: createBookingDto.email,
+        phone: createBookingDto.phone,
+        role: 'customer',
+      };
+
+      user = await this.usersService.findOrCreateUser(userData);
+    }
+
+    // 🔹 If logged-in normal user → use self
+    else if (requester) {
+      user = await this.usersService.findOne(requester.id);
+    }
+
+    // 🔹 If no auth (public user) → fallback (existing behavior)
+    else {
+      const userData = {
+        name: createBookingDto.name,
+        email: createBookingDto.email,
+        phone: createBookingDto.phone,
+        role: 'customer',
+      };
+
+      user = await this.usersService.findOrCreateUser(userData);
+    }
     console.log('👤 User resolved/created:', user.id);
 
     // 💳 PAYMENT METHOD SPLIT

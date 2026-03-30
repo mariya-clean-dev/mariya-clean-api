@@ -32,7 +32,7 @@ export class ServicesController {
   constructor(
     private readonly servicesService: ServicesService,
     private readonly responseService: ResponseService,
-  ) {}
+  ) { }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -127,16 +127,15 @@ export class ServicesController {
     );
   }
 
+
+
   @Post('price-estimate')
+  @Public()
   @UseGuards(OptionalJwtAuthGuard)
   async getPriceEstimate(
     @Body() getPriceEstimateDto: GetPriceEstimateDto,
-    @Req() req: Request,
+    @Req() req: any,
   ) {
-    // Determine if the caller is an admin from the decoded JWT (if present)
-    const user = (req as any).user;
-    const isAdmin: boolean = user?.role === 'admin';
-
     const data = await this.servicesService.getPriceEstimate(
       getPriceEstimateDto.service_id,
       getPriceEstimateDto.square_feet,
@@ -144,8 +143,9 @@ export class ServicesController {
       getPriceEstimateDto.no_of_bathrooms,
       getPriceEstimateDto.isEcoCleaning,
       getPriceEstimateDto.materialsProvidedByClient,
-      isAdmin,
+      req.user, // 👈 pass user (can be null)
     );
+
     return this.responseService.successResponse(
       'price estimation details',
       data,
