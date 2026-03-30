@@ -222,18 +222,51 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    // Check if user exists
-    await this.findOne(id);
+    // 1️⃣ Check if user exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+      include: { role: true },
+    });
 
-    // Prepare update data
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
     const updateData: any = { ...updateUserDto };
 
-    // If updating password, hash it
+    // 2️⃣ Handle password hashing
     if (updateUserDto.password) {
       updateData.password = await bcrypt.hash(updateUserDto.password, 10);
     }
 
-    // Update user
+    // 3️⃣ Handle priority shifting (ONLY for staff)
+    if (
+      updateUserDto.priority !== undefined &&
+      existingUser.role.name === 'staff'
+    ) {
+      const newPriority = updateUserDto.priority;
+      const currentPriority = existingUser.priority;
+
+      if (newPriority !== currentPriority) {
+        // Shift others (exclude current user)
+        await this.prisma.user.updateMany({
+          where: {
+            roleId: existingUser.roleId,
+            id: { not: id },
+            priority: {
+              gte: newPriority,
+            },
+          },
+          data: {
+            priority: {
+              increment: 1,
+            },
+          },
+        });
+      }
+    }
+
+    // 4️⃣ Update user
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: updateData,

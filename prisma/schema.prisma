@@ -261,9 +261,9 @@ model Booking {
   bookingAddOns      BookingAddOn[]
   notifications      Notification[]
   monthSchedules     MonthSchedule[]
-  couponId           String?       @map("coupon_id")
-  coupon             Coupon?       @relation(fields: [couponId], references: [id])
-  discountAmount     Decimal       @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  couponId           String?           @map("coupon_id")
+  coupon             Coupon?           @relation(fields: [couponId], references: [id])
+  discountAmount     Decimal           @default(0) @map("discount_amount") @db.Decimal(10, 2)
   couponUsage        CouponUsage?
 
   @@map("bookings")
@@ -593,19 +593,19 @@ model StaffZone {
 }
 
 model Coupon {
-  id               String       @id @default(uuid())
-  code             String       @unique
-  description      String?      @db.Text
-  discountType     DiscountType @map("discount_type")
-  discountValue    Decimal      @map("discount_value") @db.Decimal(10, 2)
-  minimumAmount    Decimal?     @map("minimum_amount") @db.Decimal(10, 2)
-  maxUsageCount    Int?         @map("max_usage_count")
-  maxUsagePerUser  Int?         @map("max_usage_per_user")
-  validFrom        DateTime?    @map("valid_from")
-  validUntil       DateTime?    @map("valid_until")
-  isActive         Boolean      @default(true) @map("is_active")
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
+  id              String       @id @default(uuid())
+  code            String       @unique
+  description     String?      @db.Text
+  discountType    DiscountType @map("discount_type")
+  discountValue   Decimal      @map("discount_value") @db.Decimal(10, 2)
+  minimumAmount   Decimal?     @map("minimum_amount") @db.Decimal(10, 2)
+  maxUsageCount   Int?         @map("max_usage_count")
+  maxUsagePerUser Int?         @map("max_usage_per_user")
+  validFrom       DateTime?    @map("valid_from")
+  validUntil      DateTime?    @map("valid_until")
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
   couponUsages CouponUsage[]
   bookings     Booking[]
@@ -631,4 +631,3 @@ model CouponUsage {
   @@index([userId])
   @@map("coupon_usages")
 }
-
