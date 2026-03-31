@@ -68,7 +68,11 @@ export class SchedulerService {
 
     const allStaff = await this.prisma.user.findMany({
       where,
-      orderBy: { priority: 'asc' },
+      orderBy: [
+        { priority: 'asc' },
+        { createdAt: 'asc' }, // fallback deterministic
+      ]
+
     });
     for (const staff of allStaff) {
       const hasConflict = await this.prisma.schedule.findFirst({
@@ -288,7 +292,10 @@ export class SchedulerService {
 
     const staffList = await this.prisma.user.findMany({
       where: staffWhere,
-      orderBy: { priority: 'asc' },
+      orderBy: [
+        { priority: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
 
     if (staffList.length === 0) {
@@ -1357,7 +1364,7 @@ export class SchedulerService {
   /**
    * Check if staff is available for ALL recurring dates within 60 days.
    * Handles weekly, bi_weekly (cycleWeeks=2), and four_weekly (cycleWeeks=4).
-   */
+  **/
   async checkStaffAvailabilityForRecurringBooking({
     startDate,
     time,
@@ -1406,7 +1413,10 @@ export class SchedulerService {
         status: 'active',
         staffZone: { is: { zoneId } },
       },
-      orderBy: { priority: 'asc' },
+      orderBy: [
+        { priority: 'asc' },
+        { createdAt: 'asc' },
+      ],
       select: { id: true, name: true },
     });
 
@@ -1475,9 +1485,17 @@ export class SchedulerService {
 
     const allStaffs = await this.prisma.user.findMany({
       where,
-      orderBy: { priority: 'asc' },
+      orderBy: [
+        { priority: 'asc' },
+        { createdAt: 'asc' },
+      ],
       select: { id: true, name: true, priority: true },
     });
+    // ✅ ADD HERE
+    console.log(
+      '📊 Staff order:',
+      allStaffs.map(s => `${s.name}-${s.priority}`)
+    );
 
     // 📅 Step 2: Check staff availability for the specific date
     const availabilities = await this.prisma.staffAvailability.findMany({

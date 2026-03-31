@@ -1,0 +1,67 @@
+{
+    "status": true,
+    "message": "Staff Found",
+    "data": [
+        {
+            "id": "1acce7b2-5e3e-4825-8a02-83c844835294",
+            "name": "Staff User",
+            "email": "staff@test.com",
+            "phone": "7777777777",
+            "status": "active",
+            "roleId": "9a91dceb-157f-47ce-bb8e-70c7ef851ab8",
+            "role": {
+                "id": "9a91dceb-157f-47ce-bb8e-70c7ef851ab8",
+                "name": "staff",
+                "createdAt": "2026-03-31T08:38:39.633Z",
+                "updatedAt": "2026-03-31T08:38:39.633Z"
+            },
+            "priority": null,
+            "createdAt": "2026-03-31T08:38:45.681Z",
+            "updatedAt": "2026-03-31T08:38:45.681Z",
+            "staffZone": {
+                "id": "9a820316-a1fa-468b-a159-e2e3904abdc1",
+                "staffId": "1acce7b2-5e3e-4825-8a02-83c844835294",
+                "zoneId": "ee71934c-e608-4869-a791-9efaeadc5c9f",
+                "assignedAt": "2026-03-31T08:46:53.246Z",
+                "zone": {
+                    "id": "ee71934c-e608-4869-a791-9efaeadc5c9f",
+                    "name": "alappuzha",
+                    "code": "12345-6789",
+                    "isActive": true,
+                    "deletedAt": null,
+                    "createdAt": "2026-03-31T08:46:06.922Z",
+                    "updatedAt": "2026-03-31T08:46:06.922Z"
+                }
+            }
+        },
+        {
+            "id": "924331ff-3e5e-424f-bbcc-6ed7ee212ae2",
+            "name": "staff 1",
+            "priority": 0, -- done
+        },
+        {
+            "id": "311a2631-c901-477b-b02b-93b78c5f59dc",
+            "name": "staff 2",
+            "priority": 1,
+        },
+        {
+            "id": "0158ac62-05c2-4d98-9aa5-0ef59c877958",
+            "name": "staff 3",
+            "priority": 2,
+        },
+        {
+            "id": "e47a9b19-fa66-4603-8360-781cd3b9f2e1",
+            "name": "staff 4",
+            "priority": 3,
+        },
+        {
+            "id": "5fc8182b-28a0-450c-beea-7936bf1deaf3",
+            "name": "staff 5",
+            "priority": 4,
+        },
+        {
+            "id": "f3cea9ab-c838-46be-8e53-c8e9c3f7a282",
+            "name": "staff 6",
+            "priority": 5,
+        ]
+    }

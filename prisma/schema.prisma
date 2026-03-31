@@ -122,7 +122,7 @@ model User {
   password         String?
   otp              String?
   stripePaymentId  String?    @map("stripe_payment_id")
-  priority         Int?
+  priority         Int?       @unique
   otpExpiry        DateTime?  @map("otp_expiry")
   roleId           String     @map("role_id")
   stripeCustomerId String?    @map("stripe_customer_id")

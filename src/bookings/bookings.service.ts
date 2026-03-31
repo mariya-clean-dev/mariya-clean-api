@@ -30,7 +30,7 @@ export class BookingsService {
     private readonly schedulerService: SchedulerService,
   ) { }
 
-  async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus) {
+  async create(createBookingDto: CreateBookingDto, userId: string, status?: BookingStatus, assignedStaffId?: string) {
     let updatedPrice = createBookingDto.price;
     const bookingStatus = status || BookingStatus.booked;
 
@@ -129,6 +129,8 @@ export class BookingsService {
       }
     }
 
+
+
     // Create booking with zone assignment
     const booking = await this.prisma.booking.create({
       data: {
@@ -143,6 +145,7 @@ export class BookingsService {
         materialProvided: createBookingDto.materialProvided || false,
         propertyType: createBookingDto.propertyType,
         status: bookingStatus,
+        assignedStaffId: assignedStaffId || null,
         date: createBookingDto.date ? new Date(createBookingDto.date) : null,
         price: updatedPrice,
         zoneId: zone.id,

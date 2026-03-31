@@ -42,35 +42,32 @@ export class UsersService {
       throw new ConflictException('Email already in use');
     }
 
-    if (createUserDto.priority && role.name === 'staff') {
+    if (createUserDto.priority !== undefined && role.name === 'staff') {
       const inputPriority = createUserDto.priority;
 
-      // Count current staff members
-      const totalStaff = await this.prisma.user.count({
-        where: { roleId: role.id },
-      });
-
-      // Cap priority to (totalStaff + 1)
-      const finalPriority = Math.min(inputPriority, totalStaff + 1);
-
-      createUserDto.priority = finalPriority;
-
-      // Shift down existing priorities if needed
-      await this.prisma.user.updateMany({
+      const conflictUser = await this.prisma.user.findFirst({
         where: {
           roleId: role.id,
-          priority: {
-            gte: finalPriority,
-          },
-        },
-        data: {
-          priority: {
-            increment: 1,
-          },
+          priority: inputPriority,
         },
       });
-    }
 
+      if (conflictUser) {
+        await this.prisma.user.updateMany({
+          where: {
+            roleId: role.id,
+            priority: {
+              gte: inputPriority,
+            },
+          },
+          data: {
+            priority: {
+              increment: 1,
+            },
+          },
+        });
+      }
+    }
     // Hash password
     let hashedPassword = null;
     if (password) {
@@ -248,21 +245,32 @@ export class UsersService {
       const currentPriority = existingUser.priority;
 
       if (newPriority !== currentPriority) {
-        // Shift others (exclude current user)
-        await this.prisma.user.updateMany({
+        // 🔍 Check if priority already exists
+        const conflictUser = await this.prisma.user.findFirst({
           where: {
             roleId: existingUser.roleId,
+            priority: newPriority,
             id: { not: id },
-            priority: {
-              gte: newPriority,
-            },
-          },
-          data: {
-            priority: {
-              increment: 1,
-            },
           },
         });
+
+        // ✅ Only shift if conflict exists
+        if (conflictUser) {
+          await this.prisma.user.updateMany({
+            where: {
+              roleId: existingUser.roleId,
+              id: { not: id },
+              priority: {
+                gte: newPriority,
+              },
+            },
+            data: {
+              priority: {
+                increment: 1,
+              },
+            },
+          });
+        }
       }
     }
 

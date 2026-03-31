@@ -85,6 +85,7 @@ export class BookingsController {
       (createBookingDto.areaSize / 500) * service.durationMinutes;
 
     // ✅ Get zone from pincode
+    console.log(`🔍 Checking serviceability for pincode: ${createBookingDto.address.zip}`);
     const zone = await this.prisma.pincode.findFirst({
       where: {
         code: createBookingDto.address.zip,
@@ -98,7 +99,7 @@ export class BookingsController {
         },
       },
     });
-
+    console.log('📍 Zone lookup result:', zone);
     if (!zone || !zone.zone) {
       throw new BadRequestException(
         `Pincode ${createBookingDto.address.zip} is not currently serviced.`,
@@ -182,10 +183,23 @@ export class BookingsController {
     // For offline payment: create booking with 'booked' status
     const bookingStatus = isOnlinePayment ? BookingStatus.pending : BookingStatus.booked;
 
+    const selectedStaff = await this.schedulerService.findAvailableStaffSlot(
+      new Date(date),
+      new Date(date).getDay(),
+      new Date(`${date}T${time}:00.000Z`),
+      new Date(new Date(`${date}T${time}:00.000Z`).getTime() + durationMins * 60000),
+      zone.zone.id,
+    );
+
+    if (!selectedStaff) {
+      throw new ConflictException('No staff available for selected slot');
+    }
+
     const booking = await this.bookingsService.create(
       createBookingDto,
       user.id,
       bookingStatus,
+      selectedStaff.id, // ✅ NEW
     );
     console.log(`📌 Booking created with status '${bookingStatus}':`, booking.id);
 
