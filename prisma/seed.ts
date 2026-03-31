@@ -139,6 +139,12 @@ async function main() {
       dayFrequency: 14,
       available_discount: 5.0,
     },
+    {
+      name: 'Four-Weekly',
+      description: 'A recurring four-weekly plan',
+      dayFrequency: 28, // in days
+      available_discount: 0,
+    },
   ];
 
   for (const plan of RecurringType) {
