@@ -729,9 +729,9 @@ export class SchedulerService {
       new Date(existingSchedule.startTime).getTime();
     const endTime = new Date(startTime.getTime() + durationMs);
 
-    if (dayjs(startTime).isBefore(dayjs().add(3, 'day'))) {
+    if (dayjs(startTime).isBefore(dayjs())) {
       throw new BadRequestException(
-        'New schedule must be at least 3 days in the future',
+        'New schedule must be in the future',
       );
     }
 
