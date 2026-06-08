@@ -740,6 +740,7 @@ export class SchedulerService {
         where: {
           staffId: existingSchedule.staffId,
           id: { not: existingSchedule.id },
+          status: { notIn: ['canceled', 'rescheduled', 'completed', 'missed', 'refunded'] },
           OR: [
             {
               startTime: { lte: startTime },
