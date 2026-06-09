@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -10,8 +11,16 @@ import { FirebaseModule } from '../firebase/firebase.module';
     imports: [
         PrismaModule,
         FirebaseModule,
-        JwtModule.register({
-            secret: process.env.JWT_SECRET || 'your-secret-key',
+        ConfigModule,
+        JwtModule.registerAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: async (configService: ConfigService) => ({
+                secret: configService.get<string>('JWT_SECRET'),
+                signOptions: {
+                    expiresIn: configService.get<string>('JWT_EXPIRATION'),
+                },
+            }),
         }),
     ],
     controllers: [ChatController],
